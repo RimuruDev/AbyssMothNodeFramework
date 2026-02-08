@@ -1,0 +1,826 @@
+#if UNITY_EDITOR
+using System;
+using System.IO;
+using UnityEditor;
+using UnityEngine;
+using System.Collections.Generic;
+using UnityEngine.SceneManagement;
+using UnityEditor.SceneManagement;
+using System.Diagnostics.CodeAnalysis;
+
+namespace AbyssMoth
+{
+    [SuppressMessage("ReSharper", "MergeIntoPattern")]
+    [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
+    public static class NodeFrameworkMenuItems
+    {
+        private const string menuRootEdit = "Edit/AbyssMoth Node Framework/";
+        private const string menuRootGameObject = "GameObject/AbyssMoth Node Framework/";
+        private const string menuRootAssetsCreate = "Assets/Create/AbyssMoth Node Framework/";
+
+        private const string defaultFrameworkRoot = "Assets/AbyssMothNodeFramework";
+        private const string defaultResourcesPath = defaultFrameworkRoot + "/Resources";
+        private const string defaultProjectRootPrefabName = "ProjectRootConnector";
+
+        private const string defaultProjectRootPrefabPath = defaultResourcesPath + "/" + defaultProjectRootPrefabName + ".prefab";
+
+        [MenuItem(menuRootEdit + "Initialize Project", priority = 1)]
+        public static void InitializeProject()
+        {
+            EnsureFolder(defaultFrameworkRoot);
+            EnsureFolder(defaultResourcesPath);
+
+            var existingPaths = FindProjectRootPrefabPaths();
+
+            if (existingPaths.Count > 1)
+            {
+                Debug.LogError(
+                    $"Multiple ProjectRootConnector prefabs found. Expected exactly 1. Count: {existingPaths.Count}");
+
+                for (var i = 0; i < existingPaths.Count; i++)
+                {
+                    Debug.LogError($"ProjectRootConnector prefab: {existingPaths[i]}");
+                }
+
+                return;
+            }
+
+            if (existingPaths.Count == 1)
+            {
+                var existingPath = existingPaths[0];
+
+                if (string.Equals(existingPath, defaultProjectRootPrefabPath, StringComparison.Ordinal))
+                {
+                    var existing = AssetDatabase.LoadAssetAtPath<GameObject>(existingPath);
+                    Selection.activeObject = existing;
+                    EditorGUIUtility.PingObject(existing);
+                    Debug.Log($"ProjectRootConnector already exists: {existingPath}");
+                    return;
+                }
+
+                var moved = TryMoveAsset(existingPath, defaultProjectRootPrefabPath);
+
+                if (moved)
+                {
+                    var movedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
+                    Selection.activeObject = movedPrefab;
+                    EditorGUIUtility.PingObject(movedPrefab);
+                    Debug.Log($"Moved ProjectRootConnector to: {defaultProjectRootPrefabPath}");
+                    return;
+                }
+
+                var fallback = AssetDatabase.LoadAssetAtPath<GameObject>(existingPath);
+                Selection.activeObject = fallback;
+                EditorGUIUtility.PingObject(fallback);
+                return;
+            }
+
+            var prefab = CreateProjectRootPrefabAtPath(defaultProjectRootPrefabPath);
+            Selection.activeObject = prefab;
+            EditorGUIUtility.PingObject(prefab);
+
+            Debug.Log($"Created ProjectRootConnector at: {defaultProjectRootPrefabPath}");
+        }
+
+        [MenuItem(menuRootEdit + "Validate Current Scenes", priority = 50)]
+        public static void ValidateCurrentScenes()
+        {
+            RunOnCurrentScenes(saveAfter: true, () =>
+            {
+                var ok = true;
+
+                for (var i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var scene = SceneManager.GetSceneAt(i);
+
+                    if (!scene.isLoaded)
+                    {
+                        continue;
+                    }
+
+                    ok &= ValidateScene(
+                        scene,
+                        autoFix: true,
+                        autoCollectSceneConnectors: true,
+                        autoCollectLocalNodes: true);
+                }
+
+                if (ok)
+                {
+                    Debug.Log("Validation finished: no errors");
+                }
+            });
+        }
+
+        [MenuItem(menuRootEdit + "Validate All Build Scenes", priority = 51)]
+        public static void ValidateAllBuildScenes()
+        {
+            RunPreserveSceneSetup(() =>
+            {
+                var scenes = EditorBuildSettings.scenes;
+                var ok = true;
+
+                for (var i = 0; i < scenes.Length; i++)
+                {
+                    var buildScene = scenes[i];
+
+                    if (!buildScene.enabled)
+                    {
+                        continue;
+                    }
+
+                    var path = buildScene.path;
+
+                    if (string.IsNullOrEmpty(path))
+                    {
+                        continue;
+                    }
+
+                    var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+                    ok &= ValidateScene(
+                        scene,
+                        autoFix: true,
+                        autoCollectSceneConnectors: true,
+                        autoCollectLocalNodes: true);
+
+                    EditorSceneManager.SaveScene(scene);
+                }
+
+                if (ok)
+                {
+                    Debug.Log("All build scenes validated successfully");
+                }
+            });
+        }
+
+        [MenuItem(menuRootEdit + "> Validate Full Current Scenes", priority = 49)]
+        public static void ValidateFullCurrentScenes()
+        {
+            RunOnCurrentScenes(saveAfter: true, () =>
+            {
+                var ok = true;
+
+                for (var i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var scene = SceneManager.GetSceneAt(i);
+
+                    if (!scene.isLoaded)
+                    {
+                        continue;
+                    }
+
+                    ok &= ValidateScene(scene, autoFix: true, autoCollectSceneConnectors: true,
+                        autoCollectLocalNodes: true);
+                }
+
+                if (ok)
+                {
+                    Debug.Log("Full validation finished: no errors");
+                }
+            });
+        }
+
+        [MenuItem(menuRootEdit + "> Validate Full All Build Scenes", priority = 50)]
+        public static void ValidateFullAllBuildScenes()
+        {
+            RunPreserveSceneSetup(() =>
+            {
+                var scenes = EditorBuildSettings.scenes;
+                var ok = true;
+
+                for (var i = 0; i < scenes.Length; i++)
+                {
+                    var buildScene = scenes[i];
+
+                    if (!buildScene.enabled)
+                    {
+                        continue;
+                    }
+
+                    var path = buildScene.path;
+
+                    if (string.IsNullOrEmpty(path))
+                    {
+                        continue;
+                    }
+
+                    var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+                    ok &= ValidateScene(scene, autoFix: true, autoCollectSceneConnectors: true,
+                        autoCollectLocalNodes: true);
+                    EditorSceneManager.SaveScene(scene);
+                }
+
+                if (ok)
+                {
+                    Debug.Log("Full validation for all build scenes finished: no errors");
+                }
+            });
+        }
+
+        [MenuItem(menuRootEdit + "> Validate Prefabs (Collect LocalConnector Nodes)", priority = 52)]
+        public static void ValidatePrefabs()
+        {
+            var guids = AssetDatabase.FindAssets("t:Prefab");
+
+            try
+            {
+                for (var i = 0; i < guids.Length; i++)
+                {
+                    var guid = guids[i];
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+
+                    EditorUtility.DisplayProgressBar(
+                        "Validate Prefabs",
+                        path,
+                        guids.Length > 0 ? (float)i / guids.Length : 1f);
+
+                    ValidatePrefabAtPath(path);
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            Debug.Log("Prefabs validated: LocalConnector nodes collected where applicable");
+        }
+
+        [MenuItem(menuRootEdit + "Validate Then Run", priority = 80)]
+        public static void ValidateThenRun()
+        {
+            var ok = true;
+
+            RunOnCurrentScenes(saveAfter: true, () =>
+            {
+                for (var i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var scene = SceneManager.GetSceneAt(i);
+
+                    if (!scene.isLoaded)
+                    {
+                        continue;
+                    }
+
+                    ok &= ValidateScene(
+                        scene,
+                        autoFix: true,
+                        autoCollectSceneConnectors: true,
+                        autoCollectLocalNodes: true);
+                }
+            });
+
+            if (ok)
+            {
+                EditorApplication.isPlaying = true;
+            }
+        }
+
+        [MenuItem(menuRootGameObject + "Create Scene Connector", priority = 10)]
+        public static void CreateSceneConnector()
+        {
+            var scene = SceneManager.GetActiveScene();
+
+            if (!scene.isLoaded)
+            {
+                Debug.LogError("Active scene is not loaded");
+                return;
+            }
+
+            var existing = FindSceneConnectors(scene);
+
+            if (existing.Count > 0)
+            {
+                Selection.activeGameObject = existing[0].gameObject;
+                EditorGUIUtility.PingObject(existing[0].gameObject);
+                Debug.LogWarning($"SceneConnector already exists in scene: {scene.name}");
+                return;
+            }
+
+            var go = new GameObject("SceneConnector");
+            var connector = go.AddComponent<SceneConnector>();
+
+            SceneManager.MoveGameObjectToScene(go, scene);
+            Selection.activeGameObject = go;
+
+            connector.CollectConnectors();
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+        }
+
+        [MenuItem(menuRootGameObject + "Add Local Connector To Selection", priority = 11)]
+        public static void AddLocalConnectorToSelection()
+        {
+            var selected = Selection.activeGameObject;
+
+            if (selected == null)
+            {
+                var go = new GameObject("LocalConnector");
+                go.AddComponent<LocalConnector>();
+                Selection.activeGameObject = go;
+                return;
+            }
+
+            var local = selected.GetComponent<LocalConnector>();
+
+            if (local == null)
+            {
+                local = selected.AddComponent<LocalConnector>();
+            }
+
+            local.CollectNodes();
+
+            EditorSceneManager.MarkSceneDirty(selected.scene);
+            EditorSceneManager.SaveScene(selected.scene);
+            Selection.activeGameObject = selected;
+        }
+
+        [MenuItem(menuRootAssetsCreate + "Project Root Connector Prefab", priority = 40)]
+        public static void CreateProjectRootPrefabFromProjectWindow()
+        {
+            var folder = TryGetSelectedFolderAssetPath();
+
+            if (string.IsNullOrEmpty(folder))
+            {
+                EditorUtility.DisplayDialog("Error", "Select a folder in Project window first", "Ok");
+                return;
+            }
+
+            if (!folder.EndsWith("/Resources", StringComparison.Ordinal))
+            {
+                EditorUtility.DisplayDialog(
+                    "Error",
+                    "ProjectRootConnector prefab must be placed inside a folder named 'Resources'",
+                    "Ok");
+                return;
+            }
+
+            var prefabPath = $"{folder}/{defaultProjectRootPrefabName}.prefab";
+
+            if (File.Exists(GetAbsolutePath(prefabPath)))
+            {
+                var existing = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Selection.activeObject = existing;
+                EditorGUIUtility.PingObject(existing);
+                return;
+            }
+
+            var prefab = CreateProjectRootPrefabAtPath(prefabPath);
+            Selection.activeObject = prefab;
+            EditorGUIUtility.PingObject(prefab);
+
+            Debug.Log($"Created ProjectRootConnector at: {prefabPath}");
+        }
+
+        private static bool ValidateScene(Scene scene, bool autoFix, bool autoCollectSceneConnectors, bool autoCollectLocalNodes)
+        {
+            var ok = true;
+
+            EnsureProjectRootExists(autoFix, ref ok);
+
+            if (autoCollectLocalNodes)
+            {
+                CollectLocalNodesInScene(scene);
+            }
+
+            var connectors = FindSceneConnectors(scene);
+
+            if (connectors.Count == 0)
+            {
+                if (!autoFix)
+                {
+                    Debug.LogError($"SceneConnector missing in scene: {scene.name}");
+                    return false;
+                }
+
+                var go = new GameObject("SceneConnector");
+                var connector = go.AddComponent<SceneConnector>();
+                SceneManager.MoveGameObjectToScene(go, scene);
+
+                if (autoCollectSceneConnectors)
+                {
+                    connector.CollectConnectors();
+                    EditorUtility.SetDirty(connector);
+                }
+
+                EditorSceneManager.MarkSceneDirty(scene);
+                Debug.Log($"SceneConnector created in scene: {scene.name}");
+                return true;
+            }
+
+            if (connectors.Count > 1)
+            {
+                ok = false;
+                Debug.LogError($"Multiple SceneConnector found in scene: {scene.name}. Count: {connectors.Count}");
+            }
+
+            if (autoCollectSceneConnectors)
+            {
+                for (var i = 0; i < connectors.Count; i++)
+                {
+                    var connector = connectors[i];
+
+                    if (connector == null)
+                    {
+                        continue;
+                    }
+
+                    connector.CollectConnectors();
+                    EditorUtility.SetDirty(connector);
+                }
+
+                EditorSceneManager.MarkSceneDirty(scene);
+            }
+
+            return ok;
+        }
+
+        private static void CollectLocalNodesInScene(Scene scene)
+        {
+            var roots = scene.GetRootGameObjects();
+
+            for (var i = 0; i < roots.Length; i++)
+            {
+                var root = roots[i];
+
+                if (root == null)
+                {
+                    continue;
+                }
+
+                var locals = root.GetComponentsInChildren<LocalConnector>(true);
+
+                for (var j = 0; j < locals.Length; j++)
+                {
+                    var local = locals[j];
+
+                    if (local == null)
+                    {
+                        continue;
+                    }
+
+                    if (local.gameObject.scene != scene)
+                    {
+                        continue;
+                    }
+
+                    if (local.GetComponentInParent<ProjectRootConnector>(true) != null)
+                    {
+                        continue;
+                    }
+
+                    local.CollectNodes();
+                    EditorUtility.SetDirty(local);
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+        }
+
+        private static void EnsureProjectRootExists(bool autoFix, ref bool ok)
+        {
+            var allInResources = Resources.LoadAll<ProjectRootConnector>(path: "");
+
+            if (allInResources != null && allInResources.Length > 1)
+            {
+                ok = false;
+                Debug.LogError($"Multiple ProjectRootConnector prefabs found in Resources: {allInResources.Length}");
+                return;
+            }
+
+            if (allInResources != null && allInResources.Length == 1)
+            {
+                return;
+            }
+
+            var existingPaths = FindProjectRootPrefabPaths();
+
+            if (existingPaths.Count > 1)
+            {
+                ok = false;
+                Debug.LogError(
+                    $"Multiple ProjectRootConnector prefabs found. Expected exactly 1. Count: {existingPaths.Count}");
+                return;
+            }
+
+            if (existingPaths.Count == 1)
+            {
+                if (!autoFix)
+                {
+                    ok = false;
+                    Debug.LogError(
+                        "ProjectRootConnector exists but not in Resources. Run Initialize Project to move it.");
+                    return;
+                }
+
+                InitializeProject();
+                return;
+            }
+
+            ok = false;
+
+            if (!autoFix)
+            {
+                Debug.LogError("ProjectRootConnector prefab not found in project");
+                return;
+            }
+
+            InitializeProject();
+            ok = true;
+        }
+
+        private static void ValidatePrefabAtPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            if (!path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            GameObject root = null;
+
+            try
+            {
+                root = PrefabUtility.LoadPrefabContents(path);
+
+                if (root == null)
+                {
+                    return;
+                }
+
+                var locals = root.GetComponentsInChildren<LocalConnector>(true);
+
+                if (locals == null || locals.Length == 0)
+                {
+                    return;
+                }
+
+                for (var i = 0; i < locals.Length; i++)
+                {
+                    var local = locals[i];
+
+                    if (local == null)
+                    {
+                        continue;
+                    }
+
+                    local.CollectNodes();
+                    EditorUtility.SetDirty(local);
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Prefab validation failed: {path}\n{e}");
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    PrefabUtility.UnloadPrefabContents(root);
+                }
+            }
+        }
+
+        private static List<SceneConnector> FindSceneConnectors(Scene scene)
+        {
+            var list = new List<SceneConnector>(capacity: 4);
+            var roots = scene.GetRootGameObjects();
+
+            for (var i = 0; i < roots.Length; i++)
+            {
+                var root = roots[i];
+
+                if (root == null)
+                {
+                    continue;
+                }
+
+                var found = root.GetComponentsInChildren<SceneConnector>(true);
+
+                for (var j = 0; j < found.Length; j++)
+                {
+                    var item = found[j];
+
+                    if (item == null)
+                    {
+                        continue;
+                    }
+
+                    if (item.gameObject.scene == scene)
+                    {
+                        list.Add(item);
+                    }
+                }
+            }
+
+            return list;
+        }
+
+        private static List<string> FindProjectRootPrefabPaths()
+        {
+            var result = new List<string>(capacity: 4);
+            var guids = AssetDatabase.FindAssets("t:Prefab");
+
+            for (var i = 0; i < guids.Length; i++)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+
+                if (string.IsNullOrEmpty(path))
+                {
+                    continue;
+                }
+
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+
+                if (prefab == null)
+                {
+                    continue;
+                }
+
+                if (prefab.GetComponent<ProjectRootConnector>() != null)
+                {
+                    result.Add(path);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool TryMoveAsset(string from, string to)
+        {
+            EnsureFolder(Path.GetDirectoryName(to)?.Replace("\\", "/"));
+
+            if (File.Exists(GetAbsolutePath(to)))
+            {
+                Debug.LogError($"Cannot move asset because destination already exists: {to}");
+                var existing = AssetDatabase.LoadAssetAtPath<GameObject>(to);
+                Selection.activeObject = existing;
+                EditorGUIUtility.PingObject(existing);
+                return false;
+            }
+
+            var error = AssetDatabase.MoveAsset(from, to);
+
+            if (!string.IsNullOrEmpty(error))
+            {
+                Debug.LogError($"MoveAsset failed: {error}\nFrom: {from}\nTo: {to}");
+                return false;
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            return true;
+        }
+
+        private static GameObject CreateProjectRootPrefabAtPath(string prefabPath)
+        {
+            var go = new GameObject(defaultProjectRootPrefabName);
+
+            try
+            {
+                var local = go.GetComponent<LocalConnector>();
+
+                if (local == null)
+                {
+                    local = go.AddComponent<LocalConnector>();
+                }
+
+                var root = go.GetComponent<ProjectRootConnector>();
+
+                if (root == null)
+                {
+                    go.AddComponent<ProjectRootConnector>();
+                }
+
+                local.CollectNodes();
+
+                var prefab = PrefabUtility.SaveAsPrefabAsset(go, prefabPath);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+
+                return prefab;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
+        }
+
+        private static void RunPreserveSceneSetup(Action action)
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                return;
+            }
+
+            var setup = EditorSceneManager.GetSceneManagerSetup();
+
+            try
+            {
+                action?.Invoke();
+            }
+            finally
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(setup);
+            }
+        }
+
+        private static void RunOnCurrentScenes(bool saveAfter, Action action)
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                return;
+            }
+
+            action?.Invoke();
+
+            if (!saveAfter)
+            {
+                return;
+            }
+
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+
+                if (!scene.isLoaded)
+                {
+                    continue;
+                }
+
+                if (!scene.isDirty)
+                {
+                    continue;
+                }
+
+                EditorSceneManager.SaveScene(scene);
+            }
+        }
+
+        private static void EnsureFolder(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+            {
+                return;
+            }
+
+            if (AssetDatabase.IsValidFolder(assetPath))
+            {
+                return;
+            }
+
+            var parent = Path.GetDirectoryName(assetPath)?.Replace("\\", "/");
+            var name = Path.GetFileName(assetPath);
+
+            if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(name))
+            {
+                return;
+            }
+
+            EnsureFolder(parent);
+            AssetDatabase.CreateFolder(parent, name);
+        }
+
+        private static string TryGetSelectedFolderAssetPath()
+        {
+            var objects = Selection.GetFiltered<UnityEngine.Object>(SelectionMode.Assets);
+
+            if (objects == null || objects.Length == 0)
+            {
+                return null;
+            }
+
+            var path = AssetDatabase.GetAssetPath(objects[0]);
+
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
+
+            if (AssetDatabase.IsValidFolder(path))
+            {
+                return path;
+            }
+
+            var folder = Path.GetDirectoryName(path)?.Replace("\\", "/");
+            return folder;
+        }
+
+        private static string GetAbsolutePath(string assetPath)
+        {
+            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            var full = Path.GetFullPath(Path.Combine(projectRoot, assetPath));
+            return full;
+        }
+    }
+}
+#endif
