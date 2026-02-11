@@ -13,7 +13,11 @@ namespace AbyssMoth
         [BoxGroup("State")]
         [SerializeField] private bool runWhenDisabled;
 
-        public int Order => order;
+        public virtual int Order
+        {
+            get => order;
+            protected set => order = value;
+        }
         
         public bool RunWhenDisabled => runWhenDisabled;
         
