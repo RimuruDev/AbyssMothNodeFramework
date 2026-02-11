@@ -179,6 +179,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
+                
+                if (!ShouldRun(node))
+                    continue;
 
                 if (node is IFixedTick tick)
                     tick.FixedTick(fixedDeltaTime);
@@ -193,6 +196,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
+                
+                if (!ShouldRun(node))
+                    continue;
 
                 if (node is ILateTick tick)
                     tick.LateTick(deltaTime);
