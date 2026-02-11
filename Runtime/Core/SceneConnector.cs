@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.Scripting;
@@ -19,6 +20,13 @@ namespace AbyssMoth
         [BoxGroup("Debug")]
         [SerializeField] private bool logSteps;
 
+#if UNITY_EDITOR
+        [BoxGroup("Debug")]
+        [SerializeField] private ConnectorDebugConfig debugConfig;
+        [BoxGroup("Debug")]
+        [SerializeField] private bool autoCollectOnValidate;
+#endif
+        
         private ServiceRegistry sceneContext;
 
         private readonly List<LocalConnector> dynamicConnectors = new(capacity: 64);
@@ -42,6 +50,17 @@ namespace AbyssMoth
         [ShowNativeProperty] private int PendingAddCount => pendingAdd.Count;
         [ShowNativeProperty] private int PendingRemoveCount => pendingRemove.Count;
         [ShowNativeProperty] private bool Iterating => iterating;
+
+        private void OnValidate()
+        {
+            if (Application.isPlaying)
+                return;
+            
+            if (!autoCollectOnValidate)
+                return;
+
+            CollectConnectors();
+        }
 #endif
 
         public void Awake() => 
@@ -72,6 +91,7 @@ namespace AbyssMoth
 
             dynamicConnectors.Clear();
             dynamicSet.Clear();
+            sceneContext?.Clear();
         }
 
         public void Execute(ServiceRegistry projectContext)
@@ -83,7 +103,15 @@ namespace AbyssMoth
 
             sceneHandle = gameObject.scene.handle;
             sceneContext = new ServiceRegistry(parentContainer: projectContext);
+#if UNITY_EDITOR
+            var config = debugConfig;
 
+            if (config == null)
+                config = ConnectorDebugConfig.TryLoadDefault();
+
+            if (config != null)
+                sceneContext.Add(config);
+#endif
             connectors.Sort(CompareConnectors);
 
             for (var i = 0; i < connectors.Count; i++)
