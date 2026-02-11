@@ -215,8 +215,33 @@ namespace AbyssMoth
             }
         }
 
-        public void SetEnabledTicks(bool value) => 
-            enabledTicks = value;
+        public void OnPauseRequest(Object sender = null)
+        {
+            if (!enabledTicks)
+                return;
+            
+            InternalSetEnabledTicks(false, sender);
+
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                if (nodes[i] is IPausable pausable)
+                    pausable.OnPauseRequest(sender);
+            }
+        }
+        
+        public void OnResumeRequest(Object sender = null)
+        {
+            if (enabledTicks)
+                return;
+            
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                if (nodes[i] is IPausable pausable)
+                    pausable.OnResumeRequest(sender);
+            }
+            
+            InternalSetEnabledTicks(true, sender);
+        }
 
         [Button("Collect Nodes - Собрать все нода. Жмякни если компоненты перестали выполнять Tick();")]
         public void CollectNodes()
@@ -331,6 +356,20 @@ namespace AbyssMoth
                 return connectorNode.RunWhenDisabled;
 
             return false;
+        }
+        
+        private void InternalSetEnabledTicks(bool value, Object sender = null)
+        {
+            enabledTicks = value;
+
+#if UNITY_EDITOR
+            if (sender)
+            {
+                Debug.Log(enabledTicks
+                    ? $"<color=yellow>-> Pause | Sender: <color=green>{sender.GetType().Name}.cs</color></color>"
+                    : $"<color=yellow>-> Resume | Sender: <color=green>{sender.GetType().Name}.cs</color></color>");
+            }
+#endif
         }
         
 #if UNITY_EDITOR
