@@ -19,18 +19,35 @@ namespace AbyssMoth
 
         [BoxGroup("Debug")]
         [SerializeField] private bool logSteps;
-
 #if UNITY_EDITOR
         [BoxGroup("Debug")]
         [SerializeField] private ConnectorDebugConfig debugConfig;
         [BoxGroup("Debug")]
         [SerializeField] private bool autoCollectOnValidate;
-#endif
+        [BoxGroup("Debug")]
+        [SerializeField, ReadOnly, TextArea(6, 30)] private string sceneIndexDump;
         
+        [Button("Dump SceneEntityIndex")]
+        private void DumpSceneIndex()
+        {
+            if (sceneIndex == null)
+            {
+                Debug.Log("SceneEntityIndex is null", this);
+                return;
+            }
+
+            var dump = sceneIndex.BuildDump();
+#if UNITY_EDITOR
+            sceneIndexDump = dump;
+#endif
+            Debug.Log(dump, this);
+        }
+#endif
+        private SceneEntityIndex sceneIndex;
         private ServiceRegistry sceneContext;
 
         private readonly List<LocalConnector> dynamicConnectors = new(capacity: 64);
-        private readonly HashSet<LocalConnector> dynamicSet = new();
+        private readonly HashSet<LocalConnector> dynamicSet = new(ReferenceComparer<LocalConnector>.Instance);
 
         private readonly List<LocalConnector> pendingAdd = new(capacity: 32);
         private readonly List<LocalConnector> pendingRemove = new(capacity: 32);
@@ -92,6 +109,7 @@ namespace AbyssMoth
             dynamicConnectors.Clear();
             dynamicSet.Clear();
             sceneContext?.Clear();
+            sceneIndex?.Clear();
         }
 
         public void Execute(ServiceRegistry projectContext)
@@ -103,6 +121,10 @@ namespace AbyssMoth
 
             sceneHandle = gameObject.scene.handle;
             sceneContext = new ServiceRegistry(parentContainer: projectContext);
+            
+            sceneIndex = new SceneEntityIndex();
+            sceneContext.Add(sceneIndex);
+            
 #if UNITY_EDITOR
             var config = debugConfig;
 
@@ -130,19 +152,8 @@ namespace AbyssMoth
             if (logSteps)
                 Debug.Log("SceneConnector Execute");
 
-            for (var i = 0; i < connectors.Count; i++)
-            {
-                var connector = connectors[i];
-
-                if (connector == null)
-                    continue;
-
-                if (connector.gameObject.scene.handle != sceneHandle)
-                    continue;
-
-                if (connector.isActiveAndEnabled)
-                    connector.Execute(sceneContext);
-            }
+            PreRegisterStaticConnectors();
+            ExecuteStaticConnectors();
 
             if (autoRegisterActiveUnbakedConnectors)
                 RegisterActiveUnbakedConnectors();
@@ -375,6 +386,7 @@ namespace AbyssMoth
             if (connector.gameObject.scene.handle != sceneHandle)
                 return;
 
+            sceneIndex.Register(connector);
             connector.Execute(sceneContext);
 
             var index = GetInsertIndex(connector);
@@ -386,6 +398,8 @@ namespace AbyssMoth
         {
             if (connector == null)
                 return;
+            
+            sceneIndex.Unregister(connector);
 
             if (!dynamicSet.Remove(connector))
                 return;
@@ -411,6 +425,39 @@ namespace AbyssMoth
             }
 
             return low;
+        }
+        
+        private void PreRegisterStaticConnectors()
+        {
+            for (var i = 0; i < connectors.Count; i++)
+            {
+                var connector = connectors[i];
+
+                if (connector == null)
+                    continue;
+
+                if (connector.gameObject.scene.handle != sceneHandle)
+                    continue;
+
+                sceneIndex.Register(connector);
+            }
+        }
+
+        private void ExecuteStaticConnectors()
+        {
+            for (var i = 0; i < connectors.Count; i++)
+            {
+                var connector = connectors[i];
+
+                if (connector == null)
+                    continue;
+
+                if (connector.gameObject.scene.handle != sceneHandle)
+                    continue;
+
+                if (connector.isActiveAndEnabled)
+                    connector.Execute(sceneContext);
+            }
         }
 
         private void AfterSceneInit() { /*Тут доп отработка, cutscene и тп, но мб вынесу в отдельный коллбек.*/}
