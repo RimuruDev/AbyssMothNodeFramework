@@ -1,7 +1,7 @@
-using System.Collections.Generic;
-using NaughtyAttributes;
 using UnityEngine;
+using NaughtyAttributes;
 using UnityEngine.Scripting;
+using System.Collections.Generic;
 
 namespace AbyssMoth
 {
@@ -10,7 +10,7 @@ namespace AbyssMoth
     public sealed class LocalConnector : MonoBehaviour, ILocalConnectorOrder
     {
         [BoxGroup("Order")]
-        [SerializeField, Min(0)] private int order;
+        [SerializeField, Min(-1)] private int order;
         public int Order => order;
 
         [BoxGroup("State")]
@@ -19,14 +19,23 @@ namespace AbyssMoth
         [BoxGroup("Nodes")]
         [SerializeField, ReorderableList] private List<MonoBehaviour> nodes = new();
 
+#if UNITY_EDITOR
+        [BoxGroup("Debug")]
+        [SerializeField] private bool autoCollectOnValidate;
+#endif
         private readonly List<MonoBehaviour> collected = new(capacity: 64);
 
         private bool executed;
         private bool dynamicRegistered;
         private int staticSceneHandle = -1;
+        private bool disposed;
 
         public bool EnabledTicks => enabledTicks;
 
+#if UNITY_EDITOR
+        private ConnectorDebugConfig debugConfig;
+#endif
+        
 #if UNITY_EDITOR
         [ShowNativeProperty] private int NodesCount => nodes.Count;
         [ShowNativeProperty] private bool Executed => executed;
@@ -101,12 +110,29 @@ namespace AbyssMoth
 
         public void Execute(ServiceRegistry registry)
         {
+            if (disposed)
+                return;
+
             if (executed)
                 return;
 
             executed = true;
 
             SortNodes();
+
+#if UNITY_EDITOR
+            debugConfig = null;
+            registry.TryGet(out debugConfig);
+
+            if (debugConfig != null && debugConfig.Enabled)
+            {
+                if (debugConfig.ValidateUnityCallbacks)
+                    ValidateUnityCallbacks();
+
+                if (debugConfig.LogLocalConnectorExecute)
+                    Debug.Log($"LocalConnector Execute: {name}", this);
+            }
+#endif
 
             CallBind(registry);
             CallConstruct(registry);
@@ -119,6 +145,19 @@ namespace AbyssMoth
         {
             if (!enabledTicks)
                 return;
+
+#if UNITY_EDITOR
+            if (debugConfig != null && debugConfig.Enabled && debugConfig.LogTicks)
+            {
+                var filter = debugConfig.LogTicksOnlyForConnectorName;
+
+                if (!string.IsNullOrEmpty(filter) && !string.Equals(filter, name)) { }
+                else
+                {
+                    Debug.Log($"Tick: {name}", this);
+                }
+            }
+#endif
 
             for (var i = 0; i < nodes.Count; i++)
             {
@@ -140,6 +179,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
+                
+                if (!ShouldRun(node))
+                    continue;
 
                 if (node is IFixedTick tick)
                     tick.FixedTick(fixedDeltaTime);
@@ -154,6 +196,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
+                
+                if (!ShouldRun(node))
+                    continue;
 
                 if (node is ILateTick tick)
                     tick.LateTick(deltaTime);
@@ -162,6 +207,11 @@ namespace AbyssMoth
 
         public void Dispose()
         {
+            if (disposed)
+                return;
+
+            disposed = true;
+
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
@@ -171,8 +221,33 @@ namespace AbyssMoth
             }
         }
 
-        public void SetEnabledTicks(bool value) => 
-            enabledTicks = value;
+        public void OnPauseRequest(Object sender = null)
+        {
+            if (!enabledTicks)
+                return;
+            
+            InternalSetEnabledTicks(false, sender);
+
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                if (nodes[i] is IPausable pausable)
+                    pausable.OnPauseRequest(sender);
+            }
+        }
+        
+        public void OnResumeRequest(Object sender = null)
+        {
+            if (enabledTicks)
+                return;
+            
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                if (nodes[i] is IPausable pausable)
+                    pausable.OnResumeRequest(sender);
+            }
+            
+            InternalSetEnabledTicks(true, sender);
+        }
 
         [Button("Collect Nodes - Собрать все нода. Жмякни если компоненты перестали выполнять Tick();")]
         public void CollectNodes()
@@ -193,11 +268,18 @@ namespace AbyssMoth
             SortNodes();
         }
 
+#if UNITY_EDITOR
         public void OnValidate()
         {
-            if (!Application.isPlaying && nodes.Count == 0)
-                CollectNodes();
+            if (Application.isPlaying)
+                return;
+            
+            if (!autoCollectOnValidate)
+                return;
+
+            CollectNodes();
         }
+#endif
 
         private void SortNodes() => 
             nodes.Sort(CompareNodes);
@@ -244,7 +326,17 @@ namespace AbyssMoth
         {
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is IInit step)
+                var node = nodes[i];
+
+#if UNITY_EDITOR
+                if (debugConfig != null && debugConfig.Enabled && debugConfig.LogPhaseCalls)
+                {
+                    if (node != null && node is IInit)
+                        Debug.Log($"Init: {name} -> {node.GetType().Name}", node);
+                }
+#endif
+
+                if (node is IInit step)
                     step.Init();
             }
         }
@@ -271,5 +363,72 @@ namespace AbyssMoth
 
             return false;
         }
+        
+        private void InternalSetEnabledTicks(bool value, Object sender = null)
+        {
+            enabledTicks = value;
+
+#if UNITY_EDITOR
+            if (sender)
+            {
+                Debug.Log(!enabledTicks
+                    ? $"<color=yellow>-> Pause | Sender: <color=green>{sender.GetType().Name}.cs</color></color>"
+                    : $"<color=yellow>-> Resume | Sender: <color=green>{sender.GetType().Name}.cs</color></color>");
+            }
+#endif
+        }
+        
+#if UNITY_EDITOR
+        private void ValidateUnityCallbacks()
+        {
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+
+                if (node == null)
+                    continue;
+
+                var type = node.GetType();
+
+                if (HasUnityCallback(type, "Awake") ||
+                    HasUnityCallback(type, "Start") ||
+                    
+                    /*HasUnityCallback(type, "OnEnable") ||
+                    HasUnityCallback(type, "OnDisable") ||*/
+                    
+                    HasUnityCallback(type, "Update") ||
+                    HasUnityCallback(type, "FixedUpdate") ||
+                    HasUnityCallback(type, "LateUpdate"))
+                {
+                    Debug.LogError($"Unity callbacks are not allowed in ConnectorNode: {type.Name}", node);
+                }
+            }
+        }
+        
+#if UNITY_EDITOR
+        private static bool HasUnityCallback(System.Type type, string methodName)
+        {
+            var current = type;
+
+            while (current != null && current != typeof(MonoBehaviour))
+            {
+                var flags = System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly;
+
+                var method = current.GetMethod(methodName, flags);
+                if (method != null)
+                    return true;
+
+                current = current.BaseType;
+            }
+
+            return false;
+        }
+#endif
+
+#endif
+
     }
 }

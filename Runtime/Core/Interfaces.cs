@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace AbyssMoth
 {
     public interface ILocalConnectorNode { }
@@ -20,6 +22,13 @@ namespace AbyssMoth
     public interface IConstruct
     {
         public void Construct(ServiceRegistry registry);
+    }
+
+    public interface IPausable
+    {
+        public bool IsPauseState { get; }
+        public void OnPauseRequest(Object owner = null);
+        public void OnResumeRequest(Object owner = null);
     }
 
     public interface IBeforeInit
