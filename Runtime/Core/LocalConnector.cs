@@ -31,7 +31,9 @@ namespace AbyssMoth
         private bool disposed;
 
         public bool EnabledTicks => enabledTicks;
-
+        
+        public IReadOnlyList<MonoBehaviour> Nodes => nodes;
+        
 #if UNITY_EDITOR
         private ConnectorDebugConfig debugConfig;
 #endif
