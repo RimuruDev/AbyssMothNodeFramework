@@ -5,10 +5,10 @@ using UnityEngine.Scripting;
 namespace AbyssMoth
 {
     [Preserve]
-    public abstract class ConnectorNode : MonoBehaviour, ILocalConnectorNode, IConnectorOrder
+    public abstract class ConnectorNode : MonoBehaviour, ILocalConnectorNode, IConnectorOrder, IBind
     {
         [BoxGroup("Order")]
-        [SerializeField, Min(0)] private int order;
+        [SerializeField, Min(-1)] private int order;
 
         [BoxGroup("State")]
         [SerializeField] private bool runWhenDisabled;
@@ -16,5 +16,7 @@ namespace AbyssMoth
         public int Order => order;
         
         public bool RunWhenDisabled => runWhenDisabled;
+        
+        public virtual void Bind(ServiceRegistry registry) { }
     }
 }
