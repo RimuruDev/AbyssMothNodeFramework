@@ -47,7 +47,7 @@ namespace AbyssMoth
         private ServiceRegistry sceneContext;
 
         private readonly List<LocalConnector> dynamicConnectors = new(capacity: 64);
-        private readonly HashSet<LocalConnector> dynamicSet = new();
+        private readonly HashSet<LocalConnector> dynamicSet = new(ReferenceComparer<LocalConnector>.Instance);
 
         private readonly List<LocalConnector> pendingAdd = new(capacity: 32);
         private readonly List<LocalConnector> pendingRemove = new(capacity: 32);

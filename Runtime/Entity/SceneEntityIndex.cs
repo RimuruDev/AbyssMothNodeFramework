@@ -17,7 +17,7 @@ namespace AbyssMoth
 
         private readonly Dictionary<Type, List<MonoBehaviour>> nodeMap = new(capacity: 256);
 
-        private readonly HashSet<LocalConnector> registered = new();
+        private readonly HashSet<LocalConnector> registered = new(ReferenceComparer<LocalConnector>.Instance);
 
         public int RegisteredCount => registered.Count;
         public int IdCount => idMap.Count;
@@ -262,7 +262,14 @@ namespace AbyssMoth
 
             if (!string.IsNullOrEmpty(key.Tag) && tagMap.TryGetValue(key.Tag, out var list) && list != null)
             {
-                list.Remove(connector);
+                for (var i = list.Count - 1; i >= 0; i--)
+                {
+                    if (ReferenceEquals(list[i], connector))
+                    {
+                        list.RemoveAt(i);
+                        break;
+                    }
+                }
 
                 if (list.Count == 0)
                     tagMap.Remove(key.Tag);
