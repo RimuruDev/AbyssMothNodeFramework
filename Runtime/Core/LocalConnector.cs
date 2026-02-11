@@ -31,7 +31,9 @@ namespace AbyssMoth
         private bool disposed;
 
         public bool EnabledTicks => enabledTicks;
-
+        
+        public IReadOnlyList<MonoBehaviour> Nodes => nodes;
+        
 #if UNITY_EDITOR
         private ConnectorDebugConfig debugConfig;
 #endif
@@ -99,8 +101,20 @@ namespace AbyssMoth
             dynamicRegistered = false;
         }
 
-        public void OnDestroy() => 
-            OnDisable();
+        public void OnDestroy()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector) || sceneConnector == null)
+                return;
+
+            if (!sceneConnector.IsInitialized)
+                return;
+
+            sceneConnector.Unregister(this);
+            dynamicRegistered = false;
+        }
 
         internal void MarkStatic(int sceneHandle) => 
             staticSceneHandle = sceneHandle;
