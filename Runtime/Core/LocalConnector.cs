@@ -371,7 +371,7 @@ namespace AbyssMoth
 #if UNITY_EDITOR
             if (sender)
             {
-                Debug.Log(enabledTicks
+                Debug.Log(!enabledTicks
                     ? $"<color=yellow>-> Pause | Sender: <color=green>{sender.GetType().Name}.cs</color></color>"
                     : $"<color=yellow>-> Resume | Sender: <color=green>{sender.GetType().Name}.cs</color></color>");
             }
