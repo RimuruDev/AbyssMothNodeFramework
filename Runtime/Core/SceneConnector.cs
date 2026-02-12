@@ -11,6 +11,8 @@ namespace AbyssMoth
     [DisallowMultipleComponent]
     public sealed class SceneConnector : MonoBehaviour
     {
+        public event Action<SceneConnector> SceneInitialized;
+        
         [BoxGroup("Connectors")]
         [SerializeField, ReorderableList] private List<LocalConnector> connectors = new();
 
@@ -58,7 +60,7 @@ namespace AbyssMoth
         [ShowNonSerializedField] private bool initialized;
         [ShowNonSerializedField] private bool iterating;
         [ShowNonSerializedField] private int sceneHandle;
-
+        
         public bool IsInitialized => initialized;
         public ServiceRegistry SceneContext => sceneContext;
 
@@ -158,7 +160,7 @@ namespace AbyssMoth
             if (autoRegisterActiveUnbakedConnectors)
                 RegisterActiveUnbakedConnectors();
 
-            AfterSceneInit();
+            SceneInitialized?.Invoke(this);
             initialized = true;
         }
 
@@ -459,9 +461,7 @@ namespace AbyssMoth
                     connector.Execute(sceneContext);
             }
         }
-
-        private void AfterSceneInit() { /*Тут доп отработка, cutscene и тп, но мб вынесу в отдельный коллбек.*/}
-
+        
         private int CompareConnectors(LocalConnector a, LocalConnector b)
         {
             if (a == null && b == null)
