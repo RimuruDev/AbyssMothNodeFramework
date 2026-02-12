@@ -1,3 +1,9 @@
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
+#endif
+
 using UnityEngine;
 using NaughtyAttributes;
 
@@ -21,9 +27,8 @@ namespace AbyssMoth
 
         public int Id => id;
         public string Tag => entityTag;
-        public LocalConnector LocalConnector => localConnector;
-
         public bool AutoAssignId => autoAssignId;
+        public LocalConnector LocalConnector => localConnector;
 
         public void SetId(int value) => id = value;
         public void SetTag(string value) => entityTag = value;
@@ -36,27 +41,21 @@ namespace AbyssMoth
                 localConnector = GetComponent<LocalConnector>();
         }
 
-        public void OnEnable()
+#if UNITY_EDITOR
+        [Button("Assign Unique Id")]
+        private void AssignUniqueId()
         {
-            if (!Application.isPlaying)
+            if (Application.isPlaying)
                 return;
 
-            if (!autoAssignId)
-                return;
+            Undo.RecordObject(this, "Assign Unique Entity Id");
 
-            if (id > 0)
-                return;
+            var newId = EntityIdEditorUtils.AllocateUniqueId();
+            id = newId;
 
-            if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector))
-                return;
-
-            if (!sceneConnector.IsInitialized)
-                return;
-
-            if (!sceneConnector.SceneContext.TryGet(out SceneEntityIndex index))
-                return;
-
-            SetId(index.AllocateId());
+            EditorUtility.SetDirty(this);
+            EditorSceneManager.MarkAllScenesDirty();
         }
+#endif
     }
 }
