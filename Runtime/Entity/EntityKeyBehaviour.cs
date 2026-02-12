@@ -1,5 +1,5 @@
-using NaughtyAttributes;
 using UnityEngine;
+using NaughtyAttributes;
 
 namespace AbyssMoth
 {
@@ -22,6 +22,8 @@ namespace AbyssMoth
         public int Id => id;
         public string Tag => entityTag;
         public LocalConnector LocalConnector => localConnector;
+
+        public bool AutoAssignId => autoAssignId;
 
         public void SetId(int value) => id = value;
         public void SetTag(string value) => entityTag = value;
@@ -54,7 +56,7 @@ namespace AbyssMoth
             if (!sceneConnector.SceneContext.TryGet(out SceneEntityIndex index))
                 return;
 
-            id = index.AllocateId();
+            SetId(index.AllocateId());
         }
     }
 }

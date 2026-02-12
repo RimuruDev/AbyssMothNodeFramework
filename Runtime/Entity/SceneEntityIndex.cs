@@ -18,6 +18,8 @@ namespace AbyssMoth
 
         private readonly HashSet<LocalConnector> registered = new(ReferenceComparer<LocalConnector>.Instance);
 
+        private readonly HashSet<int> reservedIds = new();
+        
         private int nextRuntimeId = 1;
         
         public int RegisteredCount => registered.Count;
@@ -25,16 +27,57 @@ namespace AbyssMoth
         public int TagCount => tagMap.Count;
         public int NodeTypeCount => nodeMap.Count;
 
+        public void PrimeReservedIds(IReadOnlyList<LocalConnector> connectors, int expectedSceneHandle)
+        {
+            reservedIds.Clear();
+
+            var max = 0;
+
+            if (connectors == null)
+            {
+                nextRuntimeId = 1;
+                return;
+            }
+
+            for (var i = 0; i < connectors.Count; i++)
+            {
+                var connector = connectors[i];
+                if (connector == null)
+                    continue;
+
+                if (connector.gameObject.scene.handle != expectedSceneHandle)
+                    continue;
+
+                if (!connector.TryGetComponent<EntityKeyBehaviour>(out var key) || key == null)
+                    continue;
+
+                var id = key.Id;
+                if (id <= 0)
+                    continue;
+
+                reservedIds.Add(id);
+
+                if (id > max)
+                    max = id;
+            }
+
+            nextRuntimeId = max + 1;
+            if (nextRuntimeId < 1)
+                nextRuntimeId = 1;
+        }
+        
         public int AllocateId()
         {
             if (nextRuntimeId < 1)
                 nextRuntimeId = 1;
 
-            while (idMap.ContainsKey(nextRuntimeId))
+            while (idMap.ContainsKey(nextRuntimeId) || reservedIds.Contains(nextRuntimeId))
                 nextRuntimeId++;
 
             var id = nextRuntimeId;
             nextRuntimeId++;
+
+            reservedIds.Add(id);
             return id;
         }
         
@@ -44,6 +87,8 @@ namespace AbyssMoth
             tagMap.Clear();
             nodeMap.Clear();
             registered.Clear();
+            reservedIds.Clear();
+            nextRuntimeId = 1;
         }
 
         public void Register(LocalConnector connector)
@@ -244,13 +289,20 @@ namespace AbyssMoth
             if (key == null)
                 return;
 
-            if (key.Id > 0)
+            var id = key.Id;
+
+            if (id <= 0 && key.AutoAssignId)
             {
-                if (idMap.TryGetValue(key.Id, out var existing) && existing != null && existing != connector)
-                    Debug.LogError($"SceneEntityIndex: Duplicate Id {key.Id} on {connector.name} and {existing.name}",
-                        connector);
+                id = AllocateId();
+                key.SetId(id);
+            }
+
+            if (id > 0)
+            {
+                if (idMap.TryGetValue(id, out var existing) && existing != null && existing != connector)
+                    Debug.LogError($"SceneEntityIndex: Duplicate Id {id} on {connector.name} and {existing.name}", connector);
                 else
-                    idMap[key.Id] = connector;
+                    idMap[id] = connector;
             }
 
             if (!string.IsNullOrEmpty(key.Tag))
