@@ -154,14 +154,16 @@ namespace AbyssMoth
             if (logSteps)
                 Debug.Log("SceneConnector Execute");
 
+            sceneIndex.PrimeReservedIds(connectors, sceneHandle);
+            
             PreRegisterStaticConnectors();
             ExecuteStaticConnectors();
 
             if (autoRegisterActiveUnbakedConnectors)
                 RegisterActiveUnbakedConnectors();
 
-            SceneInitialized?.Invoke(this);
             initialized = true;
+            SceneInitialized?.Invoke(this);
         }
 
         public void RegisterAndExecute(LocalConnector connector)
