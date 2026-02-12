@@ -86,7 +86,7 @@ namespace AbyssMoth
             {
                 var obj = EditorUtility.EntityIdToObject(buffer[i]) as GameObject;
                 if (obj != null)
-                    ComponentOrderTools.FixOnGameObject(obj);
+                    ComponentOrderTools.FixOnGameObject(obj, FixOnGameObjectMode.MoveComponentEnsureBefore);
             }
 
             buffer.Clear();

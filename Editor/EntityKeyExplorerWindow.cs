@@ -22,8 +22,8 @@ namespace AbyssMoth
 
         private int shiftFromId = 1;
         private int shiftDelta = 1;
-
-        [MenuItem("AbyssMoth/Tools/Entity Key Explorer")]
+        
+        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_2 + " Entity Key Explorer", priority = Constants.EntityKeyExplorerWindow_Priority)]
         public static void Open()
         {
             var window = GetWindow<EntityKeyExplorerWindow>();
@@ -39,12 +39,10 @@ namespace AbyssMoth
 
         private void BuildList()
         {
-            list = new ReorderableList(items, typeof(EntityKeyBehaviour), draggable: true, displayHeader: true, displayAddButton: false, displayRemoveButton: false);
+            list = new ReorderableList(items, typeof(EntityKeyBehaviour), draggable: true, displayHeader: true,
+                displayAddButton: false, displayRemoveButton: false);
 
-            list.drawHeaderCallback = rect =>
-            {
-                EditorGUI.LabelField(rect, "EntityKeyBehaviour in open scenes");
-            };
+            list.drawHeaderCallback = rect => { EditorGUI.LabelField(rect, "EntityKeyBehaviour in open scenes"); };
 
             list.drawElementCallback = (rect, index, isActive, isFocused) =>
             {
@@ -112,7 +110,8 @@ namespace AbyssMoth
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                includeInactive = EditorGUILayout.ToggleLeft("Include Inactive", includeInactive, GUILayout.Width(140f));
+                includeInactive =
+                    EditorGUILayout.ToggleLeft("Include Inactive", includeInactive, GUILayout.Width(140f));
                 search = EditorGUILayout.TextField(search);
 
                 if (GUILayout.Button("Refresh", GUILayout.Width(90f)))
