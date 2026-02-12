@@ -1,8 +1,8 @@
 #if UNITY_EDITOR
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using UnityEditor;
 using UnityEngine;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace AbyssMoth
 {
@@ -10,13 +10,16 @@ namespace AbyssMoth
     [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
     public static class ComponentOrderAutoFix
     {
-        private static readonly HashSet<int> queued = new();
-        private static readonly List<int> buffer = new(capacity: 64);
+        private static readonly HashSet<EntityId> queued = new();
+        private static readonly List<EntityId> buffer = new(capacity: 64);
+
         private static bool scheduled;
+        private static double nextSelectionFixTime;
 
         static ComponentOrderAutoFix()
         {
             ObjectFactory.componentWasAdded += OnComponentAdded;
+            EditorApplication.update += Update;
         }
 
         private static void OnComponentAdded(Component component)
@@ -32,12 +35,35 @@ namespace AbyssMoth
             Queue(component.gameObject);
         }
 
+        private static void Update()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+                return;
+
+            var now = EditorApplication.timeSinceStartup;
+            if (now < nextSelectionFixTime)
+                return;
+
+            nextSelectionFixTime = now + 0.25;
+
+            var selection = Selection.gameObjects;
+            if (selection == null || selection.Length == 0)
+                return;
+
+            for (var i = 0; i < selection.Length; i++)
+                Queue(selection[i]);
+        }
+
         private static void Queue(GameObject go)
         {
             if (go == null)
                 return;
 
-            queued.Add(go.GetInstanceID());
+            var id = go.GetEntityId();
+            if (!id.IsValid())
+                return;
+
+            queued.Add(id);
 
             if (scheduled)
                 return;
