@@ -1,5 +1,5 @@
-using NaughtyAttributes;
 using UnityEngine;
+using NaughtyAttributes;
 using UnityEngine.Scripting;
 
 namespace AbyssMoth

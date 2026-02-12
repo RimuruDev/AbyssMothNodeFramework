@@ -117,16 +117,20 @@ namespace AbyssMoth
 
         public bool TryGetById(int id, out LocalConnector connector)
         {
-            if (id <= 0)
+            if (!idMap.TryGetValue(id, out connector))
             {
                 connector = null;
                 return false;
             }
 
-            if (idMap.TryGetValue(id, out connector))
-                return connector != null;
+            if (connector == null)
+            {
+                idMap.Remove(id);
+                connector = null;
+                return false;
+            }
 
-            return false;
+            return true;
         }
 
         public bool TryGetFirstByTag(string tag, out LocalConnector connector)
@@ -172,11 +176,20 @@ namespace AbyssMoth
         {
             node = null;
 
-            if (nodeMap.TryGetValue(typeof(T), out var list) && list != null)
+            var requestedType = typeof(T);
+
+            if (nodeMap.TryGetValue(requestedType, out var list) && list != null)
             {
+                PruneDeadNodes(list);
+
                 for (var i = 0; i < list.Count; i++)
                 {
-                    if (list[i] is T typed)
+                    var item = list[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                     {
                         node = typed;
                         return true;
@@ -189,16 +202,24 @@ namespace AbyssMoth
 
             foreach (var kv in nodeMap)
             {
-                if (!typeof(T).IsAssignableFrom(kv.Key))
+                if (!requestedType.IsAssignableFrom(kv.Key))
                     continue;
 
                 var nodes = kv.Value;
+
                 if (nodes == null)
                     continue;
 
+                PruneDeadNodes(nodes);
+
                 for (var i = 0; i < nodes.Count; i++)
                 {
-                    if (nodes[i] is T typed)
+                    var item = nodes[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                     {
                         node = typed;
                         return true;
@@ -220,7 +241,12 @@ namespace AbyssMoth
             {
                 for (var i = 0; i < list.Count; i++)
                 {
-                    if (list[i] is T typed)
+                    var item = list[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                         buffer.Add(typed);
                 }
             }
@@ -242,14 +268,19 @@ namespace AbyssMoth
 
                 for (var i = 0; i < nodes.Count; i++)
                 {
-                    if (nodes[i] is T typed)
+                    var item = nodes[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                         buffer.Add(typed);
                 }
             }
 
             return buffer.Count;
         }
-        
+  
         public bool TryGetNodeInConnector<T>(LocalConnector connector, out T node) where T : MonoBehaviour
         {
             node = null;
@@ -263,7 +294,12 @@ namespace AbyssMoth
 
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is T typed)
+                var item = nodes[i];
+
+                if (item == null)
+                    continue;
+
+                if (item is T typed)
                 {
                     node = typed;
                     return true;
@@ -375,7 +411,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                if (node == null)
+
+                // === NOTE: Distinguishes a real C# null from a Unity fake-null :D === //
+                if (ReferenceEquals(node, null))
                     continue;
 
                 var type = node.GetType();
@@ -389,9 +427,91 @@ namespace AbyssMoth
                     nodeMap.Remove(type);
             }
         }
+        
+        private static void PruneDeadNodes(List<MonoBehaviour> list)
+        {
+            for (var i = list.Count - 1; i >= 0; i--)
+            {
+                if (list[i] == null)
+                    list.RemoveAt(i);
+            }
+        }
+        
+        public void PruneDeadReferences()
+        {
+            if (idMap.Count > 0)
+            {
+                var ids = new List<int>(idMap.Count);
+
+                foreach (var kv in idMap)
+                {
+                    if (kv.Value == null)
+                        ids.Add(kv.Key);
+                }
+
+                for (var i = 0; i < ids.Count; i++)
+                    idMap.Remove(ids[i]);
+            }
+
+            if (tagMap.Count > 0)
+            {
+                var tagsToRemove = new List<string>();
+
+                foreach (var kv in tagMap)
+                {
+                    var list = kv.Value;
+                    if (list == null)
+                    {
+                        tagsToRemove.Add(kv.Key);
+                        continue;
+                    }
+
+                    for (var i = list.Count - 1; i >= 0; i--)
+                    {
+                        if (list[i] == null)
+                            list.RemoveAt(i);
+                    }
+
+                    if (list.Count == 0)
+                        tagsToRemove.Add(kv.Key);
+                }
+
+                for (var i = 0; i < tagsToRemove.Count; i++)
+                    tagMap.Remove(tagsToRemove[i]);
+            }
+
+            if (nodeMap.Count > 0)
+            {
+                var typesToRemove = new List<Type>();
+
+                foreach (var kv in nodeMap)
+                {
+                    var list = kv.Value;
+                    if (list == null)
+                    {
+                        typesToRemove.Add(kv.Key);
+                        continue;
+                    }
+
+                    for (var i = list.Count - 1; i >= 0; i--)
+                    {
+                        if (list[i] == null)
+                            list.RemoveAt(i);
+                    }
+
+                    if (list.Count == 0)
+                        typesToRemove.Add(kv.Key);
+                }
+
+                for (var i = 0; i < typesToRemove.Count; i++)
+                    nodeMap.Remove(typesToRemove[i]);
+            }
+        }
 
         public string BuildDump(int maxItemsPerGroup = 40)
         {
+            PruneDeadReferences();
+            
             var sb = new System.Text.StringBuilder(2048);
 
             sb.AppendLine("SceneEntityIndex");
@@ -498,23 +618,48 @@ namespace AbyssMoth
     {
         public T FindFirstNode<T>(bool includeDerived = true) where T : class
         {
-            if (nodeMap.TryGetValue(typeof(T), out var list) && list != null)
+            var requestedType = typeof(T);
+
+            if (nodeMap.TryGetValue(requestedType, out var list) && list != null)
             {
+                PruneDeadNodes(list);
+
                 for (var i = 0; i < list.Count; i++)
                 {
-                    if (list[i] is T typed) return typed;
+                    var item = list[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
+                        return typed;
                 }
             }
 
-            if (!includeDerived) return null;
+            if (!includeDerived)
+                return null;
+
             foreach (var kv in nodeMap)
             {
-                if (!typeof(T).IsAssignableFrom(kv.Key)) continue;
+                if (!requestedType.IsAssignableFrom(kv.Key))
+                    continue;
+
                 var nodes = kv.Value;
-                if (nodes == null) continue;
+
+                if (nodes == null)
+                    continue;
+
+                PruneDeadNodes(nodes);
+
                 for (var i = 0; i < nodes.Count; i++)
                 {
-                    if (nodes[i] is T typed) return typed;
+                    var item = nodes[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
+                        return typed;
                 }
             }
 

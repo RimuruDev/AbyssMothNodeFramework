@@ -1,3 +1,4 @@
+using UnityEngine;
 using UnityEngine.Scripting;
 
 namespace AbyssMoth
@@ -9,5 +10,13 @@ namespace AbyssMoth
         public virtual void Init() { }
         public virtual void AfterInit() { }
         public virtual void Dispose() { }
+
+        private void OnDestroy()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            Dispose();
+        }
     }
 }

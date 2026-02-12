@@ -82,23 +82,13 @@ namespace AbyssMoth
             sceneConnector.RegisterAndExecute(this);
             dynamicRegistered = true;
         }
-
+        
         public void OnDisable()
         {
             if (!Application.isPlaying)
                 return;
 
-            if (!dynamicRegistered)
-                return;
-
-            if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector) || sceneConnector == null)
-            {
-                dynamicRegistered = false;
-                return;
-            }
-
-            sceneConnector.Unregister(this);
-            dynamicRegistered = false;
+            TryUnregisterFromScene(force: false);
         }
 
         public void OnDestroy()
@@ -106,14 +96,10 @@ namespace AbyssMoth
             if (!Application.isPlaying)
                 return;
 
-            if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector) || sceneConnector == null)
+            if (disposed)
                 return;
 
-            if (!sceneConnector.IsInitialized)
-                return;
-
-            sceneConnector.Unregister(this);
-            dynamicRegistered = false;
+            TryUnregisterFromScene(force: true);
         }
 
         internal void MarkStatic(int sceneHandle) => 
@@ -132,6 +118,7 @@ namespace AbyssMoth
 
             executed = true;
 
+            PruneMissingNodes();
             SortNodes();
 
 #if UNITY_EDITOR
@@ -157,25 +144,20 @@ namespace AbyssMoth
 
         public void Tick(float deltaTime)
         {
+            if (disposed)
+                return;
+            
             if (!enabledTicks)
                 return;
 
-#if UNITY_EDITOR
-            if (debugConfig != null && debugConfig.Enabled && debugConfig.LogTicks)
-            {
-                var filter = debugConfig.LogTicksOnlyForConnectorName;
-
-                if (!string.IsNullOrEmpty(filter) && !string.Equals(filter, name)) { }
-                else
-                {
-                    Debug.Log($"Tick: {name}", this);
-                }
-            }
-#endif
-
+            StepLogger(nameof(Tick));
+            
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
+                
+                if (node == null)
+                    continue;
 
                 if (!ShouldRun(node))
                     continue;
@@ -187,13 +169,21 @@ namespace AbyssMoth
 
         public void FixedTick(float fixedDeltaTime)
         {
+            if (disposed)
+                return;
+
             if (!enabledTicks)
                 return;
+            
+            StepLogger(nameof(FixedTick));
 
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
                 
+                if (node == null)
+                    continue;
+
                 if (!ShouldRun(node))
                     continue;
 
@@ -204,13 +194,21 @@ namespace AbyssMoth
 
         public void LateTick(float deltaTime)
         {
+            if (disposed)
+                return;
+            
             if (!enabledTicks)
                 return;
+            
+            StepLogger(nameof(LateTick));
 
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
                 
+                if (node == null)
+                    continue;
+
                 if (!ShouldRun(node))
                     continue;
 
@@ -226,9 +224,14 @@ namespace AbyssMoth
 
             disposed = true;
 
+            TryUnregisterFromScene(force: true);
+
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
+                
+                if (node == null)
+                    continue;
 
                 if (node is IDispose disposable)
                     disposable.Dispose();
@@ -244,7 +247,12 @@ namespace AbyssMoth
 
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is IPausable pausable)
+                var node = nodes[i];
+
+                if (node == null)
+                    continue;
+
+                if (node is IPausable pausable)
                     pausable.OnPauseRequest(sender);
             }
         }
@@ -256,7 +264,12 @@ namespace AbyssMoth
             
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is IPausable pausable)
+                var node = nodes[i];
+
+                if (node == null)
+                    continue;
+
+                if (node is IPausable pausable)
                     pausable.OnResumeRequest(sender);
             }
             
@@ -275,6 +288,9 @@ namespace AbyssMoth
             {
                 var item = collected[i];
 
+                if (item == null)
+                    continue;
+                
                 if (item is ILocalConnectorNode)
                     nodes.Add(item);
             }
@@ -313,7 +329,12 @@ namespace AbyssMoth
         {
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is IBind bind)
+                var node = nodes[i];
+
+                if (node == null)
+                    continue;
+
+                if (node is IBind bind)
                     bind.Bind(registry);
             }
         }
@@ -322,7 +343,12 @@ namespace AbyssMoth
         {
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is IConstruct construct)
+                var node = nodes[i];
+                
+                if (node == null)
+                    continue;
+                
+                if (node is IConstruct construct)
                     construct.Construct(registry);
             }
         }
@@ -331,7 +357,12 @@ namespace AbyssMoth
         {
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is IBeforeInit step)
+                var node = nodes[i];
+                
+                if (node == null)
+                    continue;
+                
+                if (node is IBeforeInit step)
                     step.BeforeInit();
             }
         }
@@ -341,7 +372,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-
+                
+                if (node == null)
+                    continue;
 #if UNITY_EDITOR
                 if (debugConfig != null && debugConfig.Enabled && debugConfig.LogPhaseCalls)
                 {
@@ -359,7 +392,12 @@ namespace AbyssMoth
         {
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is IAfterInit step)
+                var node = nodes[i];
+                
+                if (node == null)
+                    continue;
+                
+                if (node is IAfterInit step)
                     step.AfterInit();
             }
         }
@@ -378,6 +416,36 @@ namespace AbyssMoth
             return false;
         }
         
+        private void TryUnregisterFromScene(bool force)
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (!force && !dynamicRegistered)
+                return;
+
+            if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector) || sceneConnector == null)
+            {
+                dynamicRegistered = false;
+                return;
+            }
+
+            if (!sceneConnector.IsInitialized)
+                return;
+
+            sceneConnector.Unregister(this);
+            dynamicRegistered = false;
+        }
+        
+        private void PruneMissingNodes()
+        {
+            for (var i = nodes.Count - 1; i >= 0; i--)
+            {
+                if (nodes[i] == null)
+                    nodes.RemoveAt(i);
+            }
+        }
+
         private void InternalSetEnabledTicks(bool value, Object sender = null)
         {
             enabledTicks = value;
@@ -418,7 +486,7 @@ namespace AbyssMoth
                 }
             }
         }
-        
+
 #if UNITY_EDITOR
         private static bool HasUnityCallback(System.Type type, string methodName)
         {
@@ -441,6 +509,20 @@ namespace AbyssMoth
             return false;
         }
 #endif
+
+        private void StepLogger(string label)
+        {
+#if UNITY_EDITOR
+            if (debugConfig != null && debugConfig.Enabled && debugConfig.LogTicks)
+            {
+                var filter = debugConfig.LogTicksOnlyForConnectorName;
+
+                if (!string.IsNullOrEmpty(filter) && !string.Equals(filter, name)) { }
+                else
+                    Debug.Log($"{label}: {name}", context: this);
+            }
+#endif
+        }
 
 #endif
 
