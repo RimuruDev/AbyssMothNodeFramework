@@ -1,3 +1,8 @@
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.SceneManagement;
+#endif
+
 using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.Scripting;
@@ -22,6 +27,8 @@ namespace AbyssMoth
 #if UNITY_EDITOR
         [BoxGroup("Debug")]
         [SerializeField] private bool autoCollectOnValidate;
+        [BoxGroup("Debug")]
+        [SerializeField] private bool autoPruneMissingOnValidate = true;
 #endif
         private readonly List<MonoBehaviour> collected = new(capacity: 64);
 
@@ -36,9 +43,7 @@ namespace AbyssMoth
         
 #if UNITY_EDITOR
         private ConnectorDebugConfig debugConfig;
-#endif
-        
-#if UNITY_EDITOR
+
         [ShowNativeProperty] private int NodesCount => nodes.Count;
         [ShowNativeProperty] private bool Executed => executed;
         [ShowNativeProperty] private bool DynamicRegistered => dynamicRegistered;
@@ -53,6 +58,13 @@ namespace AbyssMoth
                 for (var i = 0; i < nodes.Count; i++)
                 {
                     var n = nodes[i];
+
+                    if (n == null)
+                    {
+                        sb.AppendLine("Missing");
+                        continue;
+                    }
+
                     var nodeOrder = n is IConnectorOrder o ? o.Order : 0;
                     sb.AppendLine($"{nodeOrder} | {n.GetType().Name}");
                 }
@@ -60,8 +72,22 @@ namespace AbyssMoth
                 return sb.ToString();
             }
         }
-#endif
+        
+        [Button("Prune Missing Nodes")]
+        private void PruneMissingNodesButton()
+        {
+            if (Application.isPlaying)
+                return;
 
+            var removed = PruneMissingNodes();
+            if (removed <= 0)
+                return;
+
+            Undo.RecordObject(this, "Prune Missing Nodes");
+            EditorUtility.SetDirty(this);
+            EditorSceneManager.MarkAllScenesDirty();
+        }
+#endif
         public void OnEnable()
         {
             if (!Application.isPlaying)
@@ -303,19 +329,31 @@ namespace AbyssMoth
         {
             if (Application.isPlaying)
                 return;
-            
-            if (!autoCollectOnValidate)
-                return;
 
-            CollectNodes();
+            if (autoCollectOnValidate)
+            {
+                CollectNodes();
+                return;
+            }
+
+            if (autoPruneMissingOnValidate)
+                PruneMissingNodes();
         }
 #endif
-
-        private void SortNodes() => 
+        private void SortNodes() =>
             nodes.Sort(CompareNodes);
 
         private int CompareNodes(MonoBehaviour a, MonoBehaviour b)
         {
+            if (a == null && b == null)
+                return 0;
+
+            if (a == null)
+                return 1;
+
+            if (b == null)
+                return -1;
+
             var orderA = a is IConnectorOrder oa ? oa.Order : 0;
             var orderB = b is IConnectorOrder ob ? ob.Order : 0;
 
@@ -437,13 +475,20 @@ namespace AbyssMoth
             dynamicRegistered = false;
         }
         
-        private void PruneMissingNodes()
+        private int PruneMissingNodes()
         {
+            var removed = 0;
+
             for (var i = nodes.Count - 1; i >= 0; i--)
             {
-                if (nodes[i] == null)
-                    nodes.RemoveAt(i);
+                if (nodes[i] != null)
+                    continue;
+
+                nodes.RemoveAt(i);
+                removed++;
             }
+
+            return removed;
         }
 
         private void InternalSetEnabledTicks(bool value, Object sender = null)

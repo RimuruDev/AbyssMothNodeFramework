@@ -1,3 +1,8 @@
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.SceneManagement;
+#endif
+
 using System;
 using UnityEngine;
 using NaughtyAttributes;
@@ -28,22 +33,8 @@ namespace AbyssMoth
         [SerializeField] private bool autoCollectOnValidate;
         [BoxGroup("Debug")]
         [SerializeField, ReadOnly, TextArea(6, 30)] private string sceneIndexDump;
-        
-        [Button("Dump SceneEntityIndex")]
-        private void DumpSceneIndex()
-        {
-            if (sceneIndex == null)
-            {
-                Debug.Log("SceneEntityIndex is null", this);
-                return;
-            }
-
-            var dump = sceneIndex.BuildDump();
-#if UNITY_EDITOR
-            sceneIndexDump = dump;
-#endif
-            Debug.Log(dump, this);
-        }
+        [BoxGroup("Debug")]
+        [SerializeField] private bool autoPruneMissingOnValidate = true;
 #endif
         private SceneEntityIndex sceneIndex;
         private ServiceRegistry sceneContext;
@@ -74,11 +65,46 @@ namespace AbyssMoth
         {
             if (Application.isPlaying)
                 return;
-            
-            if (!autoCollectOnValidate)
+
+            if (autoCollectOnValidate)
+            {
+                CollectConnectors();
+                return;
+            }
+
+            if (autoPruneMissingOnValidate)
+                PruneMissingConnectors();
+        }
+        
+        [Button("Prune Missing Connectors")]
+        private void PruneMissingConnectorsButton()
+        {
+            if (Application.isPlaying)
                 return;
 
-            CollectConnectors();
+            var removed = PruneMissingConnectors();
+            if (removed <= 0)
+                return;
+
+            Undo.RecordObject(this, "Prune Missing Connectors");
+            EditorUtility.SetDirty(this);
+            EditorSceneManager.MarkAllScenesDirty();
+        }
+        
+        [Button("Dump SceneEntityIndex")]
+        private void DumpSceneIndex()
+        {
+            if (sceneIndex == null)
+            {
+                Debug.Log("SceneEntityIndex is null", this);
+                return;
+            }
+
+            var dump = sceneIndex.BuildDump();
+
+            sceneIndexDump = dump;
+            
+            Debug.Log(dump, this);
         }
 #endif
 
@@ -136,6 +162,7 @@ namespace AbyssMoth
             if (config != null)
                 sceneContext.Add(config);
 #endif
+            PruneMissingConnectors();
             connectors.Sort(CompareConnectors);
 
             for (var i = 0; i < connectors.Count; i++)
@@ -482,6 +509,22 @@ namespace AbyssMoth
                 return oa.CompareTo(ob);
 
             return string.CompareOrdinal(a.name, b.name);
+        }
+        
+        private int PruneMissingConnectors()
+        {
+            var removed = 0;
+
+            for (var i = connectors.Count - 1; i >= 0; i--)
+            {
+                if (connectors[i] != null)
+                    continue;
+
+                connectors.RemoveAt(i);
+                removed++;
+            }
+
+            return removed;
         }
     }
 }
