@@ -6,24 +6,38 @@ using UnityEngine.Scripting;
 namespace AbyssMoth
 {
     [Preserve]
-    public sealed class SceneEntityIndex
+    public sealed partial class SceneEntityIndex
     {
         private static readonly IReadOnlyList<LocalConnector> emptyConnectors = Array.Empty<LocalConnector>();
 
         private readonly Dictionary<int, LocalConnector> idMap = new(capacity: 128);
 
-        private readonly Dictionary<string, List<LocalConnector>> tagMap = new(capacity: 64,
-            comparer: StringComparer.Ordinal);
+        private readonly Dictionary<string, List<LocalConnector>> tagMap = new(capacity: 64, comparer: StringComparer.Ordinal);
 
         private readonly Dictionary<Type, List<MonoBehaviour>> nodeMap = new(capacity: 256);
 
         private readonly HashSet<LocalConnector> registered = new(ReferenceComparer<LocalConnector>.Instance);
 
+        private int nextRuntimeId = 1;
+        
         public int RegisteredCount => registered.Count;
         public int IdCount => idMap.Count;
         public int TagCount => tagMap.Count;
         public int NodeTypeCount => nodeMap.Count;
 
+        public int AllocateId()
+        {
+            if (nextRuntimeId < 1)
+                nextRuntimeId = 1;
+
+            while (idMap.ContainsKey(nextRuntimeId))
+                nextRuntimeId++;
+
+            var id = nextRuntimeId;
+            nextRuntimeId++;
+            return id;
+        }
+        
         public void Clear()
         {
             idMap.Clear();
@@ -149,7 +163,7 @@ namespace AbyssMoth
 
             return false;
         }
-
+        
         public int GetNodes<T>(List<T> buffer, bool includeDerived = true) where T : class
         {
             if (buffer == null)
@@ -190,7 +204,7 @@ namespace AbyssMoth
 
             return buffer.Count;
         }
-
+        
         public bool TryGetNodeInConnector<T>(LocalConnector connector, out T node) where T : MonoBehaviour
         {
             node = null;
@@ -422,6 +436,61 @@ namespace AbyssMoth
             }
 
             return sb.ToString();
+        }
+
+        public override string ToString() => BuildDump();
+    }
+    
+    // === Unsafe API === //
+    public sealed partial class SceneEntityIndex
+    {
+        public T FindFirstNode<T>(bool includeDerived = true) where T : class
+        {
+            if (nodeMap.TryGetValue(typeof(T), out var list) && list != null)
+            {
+                for (var i = 0; i < list.Count; i++)
+                {
+                    if (list[i] is T typed) return typed;
+                }
+            }
+
+            if (!includeDerived) return null;
+            foreach (var kv in nodeMap)
+            {
+                if (!typeof(T).IsAssignableFrom(kv.Key)) continue;
+                var nodes = kv.Value;
+                if (nodes == null) continue;
+                for (var i = 0; i < nodes.Count; i++)
+                {
+                    if (nodes[i] is T typed) return typed;
+                }
+            }
+
+            return null;
+        }
+
+        public T GetFirstNodeOrThrow<T>(bool includeDerived = true) where T : class
+        {
+            if (TryGetFirstNode<T>(out var node, includeDerived))
+                return node;
+
+            throw new InvalidOperationException($"SceneEntityIndex: Node {typeof(T).Name} not found.\n{BuildDump()}");
+        }
+        
+        public LocalConnector GetFirstByTagOrThrow(string tag)
+        {
+            if (TryGetFirstByTag(tag, out var connector))
+                return connector;
+
+            throw new InvalidOperationException($"SceneEntityIndex: Tag '{tag}' not found.\n{BuildDump()}");
+        }
+
+        public LocalConnector GetByIdOrThrow(int id)
+        {
+            if (TryGetById(id, out var connector))
+                return connector;
+
+            throw new InvalidOperationException($"SceneEntityIndex: Id '{id}' not found.\n{BuildDump()}");
         }
     }
 }
