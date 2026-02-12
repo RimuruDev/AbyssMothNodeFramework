@@ -48,7 +48,7 @@ namespace AbyssMothNodeFramework.Example
            // 100% - Warmed up !!!
         }
 
-        public override void Dispose()
+        protected override void DisposeInternal()
         {
             // Dispose subscribers:
             // container.RemoveIfSame(expected: null);

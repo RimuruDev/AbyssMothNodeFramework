@@ -6,30 +6,89 @@ using UnityEngine.Scripting;
 namespace AbyssMoth
 {
     [Preserve]
-    public sealed class SceneEntityIndex
+    public sealed partial class SceneEntityIndex
     {
         private static readonly IReadOnlyList<LocalConnector> emptyConnectors = Array.Empty<LocalConnector>();
 
         private readonly Dictionary<int, LocalConnector> idMap = new(capacity: 128);
 
-        private readonly Dictionary<string, List<LocalConnector>> tagMap = new(capacity: 64,
-            comparer: StringComparer.Ordinal);
+        private readonly Dictionary<string, List<LocalConnector>> tagMap = new(capacity: 64, comparer: StringComparer.Ordinal);
 
         private readonly Dictionary<Type, List<MonoBehaviour>> nodeMap = new(capacity: 256);
 
         private readonly HashSet<LocalConnector> registered = new(ReferenceComparer<LocalConnector>.Instance);
 
+        private readonly HashSet<int> reservedIds = new();
+        
+        private int nextRuntimeId = 1;
+        
         public int RegisteredCount => registered.Count;
         public int IdCount => idMap.Count;
         public int TagCount => tagMap.Count;
         public int NodeTypeCount => nodeMap.Count;
 
+        public void PrimeReservedIds(IReadOnlyList<LocalConnector> connectors, int expectedSceneHandle)
+        {
+            reservedIds.Clear();
+
+            var max = 0;
+
+            if (connectors == null)
+            {
+                nextRuntimeId = 1;
+                return;
+            }
+
+            for (var i = 0; i < connectors.Count; i++)
+            {
+                var connector = connectors[i];
+                if (connector == null)
+                    continue;
+
+                if (connector.gameObject.scene.handle != expectedSceneHandle)
+                    continue;
+
+                if (!connector.TryGetComponent<EntityKeyBehaviour>(out var key) || key == null)
+                    continue;
+
+                var id = key.Id;
+                if (id <= 0)
+                    continue;
+
+                reservedIds.Add(id);
+
+                if (id > max)
+                    max = id;
+            }
+
+            nextRuntimeId = max + 1;
+            if (nextRuntimeId < 1)
+                nextRuntimeId = 1;
+        }
+        
+        public int AllocateId()
+        {
+            if (nextRuntimeId < 1)
+                nextRuntimeId = 1;
+
+            while (idMap.ContainsKey(nextRuntimeId) || reservedIds.Contains(nextRuntimeId))
+                nextRuntimeId++;
+
+            var id = nextRuntimeId;
+            nextRuntimeId++;
+
+            reservedIds.Add(id);
+            return id;
+        }
+        
         public void Clear()
         {
             idMap.Clear();
             tagMap.Clear();
             nodeMap.Clear();
             registered.Clear();
+            reservedIds.Clear();
+            nextRuntimeId = 1;
         }
 
         public void Register(LocalConnector connector)
@@ -58,16 +117,20 @@ namespace AbyssMoth
 
         public bool TryGetById(int id, out LocalConnector connector)
         {
-            if (id <= 0)
+            if (!idMap.TryGetValue(id, out connector))
             {
                 connector = null;
                 return false;
             }
 
-            if (idMap.TryGetValue(id, out connector))
-                return connector != null;
+            if (connector == null)
+            {
+                idMap.Remove(id);
+                connector = null;
+                return false;
+            }
 
-            return false;
+            return true;
         }
 
         public bool TryGetFirstByTag(string tag, out LocalConnector connector)
@@ -113,11 +176,20 @@ namespace AbyssMoth
         {
             node = null;
 
-            if (nodeMap.TryGetValue(typeof(T), out var list) && list != null)
+            var requestedType = typeof(T);
+
+            if (nodeMap.TryGetValue(requestedType, out var list) && list != null)
             {
+                PruneDeadNodes(list);
+
                 for (var i = 0; i < list.Count; i++)
                 {
-                    if (list[i] is T typed)
+                    var item = list[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                     {
                         node = typed;
                         return true;
@@ -130,16 +202,24 @@ namespace AbyssMoth
 
             foreach (var kv in nodeMap)
             {
-                if (!typeof(T).IsAssignableFrom(kv.Key))
+                if (!requestedType.IsAssignableFrom(kv.Key))
                     continue;
 
                 var nodes = kv.Value;
+
                 if (nodes == null)
                     continue;
 
+                PruneDeadNodes(nodes);
+
                 for (var i = 0; i < nodes.Count; i++)
                 {
-                    if (nodes[i] is T typed)
+                    var item = nodes[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                     {
                         node = typed;
                         return true;
@@ -149,7 +229,7 @@ namespace AbyssMoth
 
             return false;
         }
-
+        
         public int GetNodes<T>(List<T> buffer, bool includeDerived = true) where T : class
         {
             if (buffer == null)
@@ -161,7 +241,12 @@ namespace AbyssMoth
             {
                 for (var i = 0; i < list.Count; i++)
                 {
-                    if (list[i] is T typed)
+                    var item = list[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                         buffer.Add(typed);
                 }
             }
@@ -183,14 +268,19 @@ namespace AbyssMoth
 
                 for (var i = 0; i < nodes.Count; i++)
                 {
-                    if (nodes[i] is T typed)
+                    var item = nodes[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
                         buffer.Add(typed);
                 }
             }
 
             return buffer.Count;
         }
-
+  
         public bool TryGetNodeInConnector<T>(LocalConnector connector, out T node) where T : MonoBehaviour
         {
             node = null;
@@ -204,7 +294,12 @@ namespace AbyssMoth
 
             for (var i = 0; i < nodes.Count; i++)
             {
-                if (nodes[i] is T typed)
+                var item = nodes[i];
+
+                if (item == null)
+                    continue;
+
+                if (item is T typed)
                 {
                     node = typed;
                     return true;
@@ -230,13 +325,20 @@ namespace AbyssMoth
             if (key == null)
                 return;
 
-            if (key.Id > 0)
+            var id = key.Id;
+
+            if (id <= 0 && key.AutoAssignId)
             {
-                if (idMap.TryGetValue(key.Id, out var existing) && existing != null && existing != connector)
-                    Debug.LogError($"SceneEntityIndex: Duplicate Id {key.Id} on {connector.name} and {existing.name}",
-                        connector);
+                id = AllocateId();
+                key.SetId(id);
+            }
+
+            if (id > 0)
+            {
+                if (idMap.TryGetValue(id, out var existing) && existing != null && existing != connector)
+                    Debug.LogError($"SceneEntityIndex: Duplicate Id {id} on {connector.name} and {existing.name}", connector);
                 else
-                    idMap[key.Id] = connector;
+                    idMap[id] = connector;
             }
 
             if (!string.IsNullOrEmpty(key.Tag))
@@ -309,7 +411,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                if (node == null)
+
+                // === NOTE: Distinguishes a real C# null from a Unity fake-null :D === //
+                if (ReferenceEquals(node, null))
                     continue;
 
                 var type = node.GetType();
@@ -323,9 +427,91 @@ namespace AbyssMoth
                     nodeMap.Remove(type);
             }
         }
+        
+        private static void PruneDeadNodes(List<MonoBehaviour> list)
+        {
+            for (var i = list.Count - 1; i >= 0; i--)
+            {
+                if (list[i] == null)
+                    list.RemoveAt(i);
+            }
+        }
+        
+        public void PruneDeadReferences()
+        {
+            if (idMap.Count > 0)
+            {
+                var ids = new List<int>(idMap.Count);
+
+                foreach (var kv in idMap)
+                {
+                    if (kv.Value == null)
+                        ids.Add(kv.Key);
+                }
+
+                for (var i = 0; i < ids.Count; i++)
+                    idMap.Remove(ids[i]);
+            }
+
+            if (tagMap.Count > 0)
+            {
+                var tagsToRemove = new List<string>();
+
+                foreach (var kv in tagMap)
+                {
+                    var list = kv.Value;
+                    if (list == null)
+                    {
+                        tagsToRemove.Add(kv.Key);
+                        continue;
+                    }
+
+                    for (var i = list.Count - 1; i >= 0; i--)
+                    {
+                        if (list[i] == null)
+                            list.RemoveAt(i);
+                    }
+
+                    if (list.Count == 0)
+                        tagsToRemove.Add(kv.Key);
+                }
+
+                for (var i = 0; i < tagsToRemove.Count; i++)
+                    tagMap.Remove(tagsToRemove[i]);
+            }
+
+            if (nodeMap.Count > 0)
+            {
+                var typesToRemove = new List<Type>();
+
+                foreach (var kv in nodeMap)
+                {
+                    var list = kv.Value;
+                    if (list == null)
+                    {
+                        typesToRemove.Add(kv.Key);
+                        continue;
+                    }
+
+                    for (var i = list.Count - 1; i >= 0; i--)
+                    {
+                        if (list[i] == null)
+                            list.RemoveAt(i);
+                    }
+
+                    if (list.Count == 0)
+                        typesToRemove.Add(kv.Key);
+                }
+
+                for (var i = 0; i < typesToRemove.Count; i++)
+                    nodeMap.Remove(typesToRemove[i]);
+            }
+        }
 
         public string BuildDump(int maxItemsPerGroup = 40)
         {
+            PruneDeadReferences();
+            
             var sb = new System.Text.StringBuilder(2048);
 
             sb.AppendLine("SceneEntityIndex");
@@ -422,6 +608,86 @@ namespace AbyssMoth
             }
 
             return sb.ToString();
+        }
+
+        public override string ToString() => BuildDump();
+    }
+    
+    // === Unsafe API === //
+    public sealed partial class SceneEntityIndex
+    {
+        public T FindFirstNode<T>(bool includeDerived = true) where T : class
+        {
+            var requestedType = typeof(T);
+
+            if (nodeMap.TryGetValue(requestedType, out var list) && list != null)
+            {
+                PruneDeadNodes(list);
+
+                for (var i = 0; i < list.Count; i++)
+                {
+                    var item = list[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
+                        return typed;
+                }
+            }
+
+            if (!includeDerived)
+                return null;
+
+            foreach (var kv in nodeMap)
+            {
+                if (!requestedType.IsAssignableFrom(kv.Key))
+                    continue;
+
+                var nodes = kv.Value;
+
+                if (nodes == null)
+                    continue;
+
+                PruneDeadNodes(nodes);
+
+                for (var i = 0; i < nodes.Count; i++)
+                {
+                    var item = nodes[i];
+
+                    if (item == null)
+                        continue;
+
+                    if (item is T typed)
+                        return typed;
+                }
+            }
+
+            return null;
+        }
+
+        public T GetFirstNodeOrThrow<T>(bool includeDerived = true) where T : class
+        {
+            if (TryGetFirstNode<T>(out var node, includeDerived))
+                return node;
+
+            throw new InvalidOperationException($"SceneEntityIndex: Node {typeof(T).Name} not found.\n{BuildDump()}");
+        }
+        
+        public LocalConnector GetFirstByTagOrThrow(string tag)
+        {
+            if (TryGetFirstByTag(tag, out var connector))
+                return connector;
+
+            throw new InvalidOperationException($"SceneEntityIndex: Tag '{tag}' not found.\n{BuildDump()}");
+        }
+
+        public LocalConnector GetByIdOrThrow(int id)
+        {
+            if (TryGetById(id, out var connector))
+                return connector;
+
+            throw new InvalidOperationException($"SceneEntityIndex: Id '{id}' not found.\n{BuildDump()}");
         }
     }
 }

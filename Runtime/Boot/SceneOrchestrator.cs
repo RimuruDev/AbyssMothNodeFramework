@@ -9,41 +9,66 @@ namespace AbyssMoth
     public sealed class SceneOrchestrator : MonoBehaviour
     {
         private ProjectRootConnector projectRoot;
+        private AppLifecycleService lifecycle;
 
         public void Awake()
         {
             projectRoot = FindFirstObjectByType<ProjectRootConnector>(FindObjectsInactive.Include);
 
-            if (projectRoot == null)
+            // === Project Root === //
             {
-                var prefabs = Resources.LoadAll<ProjectRootConnector>(path: "");
+                if (projectRoot == null)
+                {
+                    var prefabs = Resources.LoadAll<ProjectRootConnector>(path: "");
 
-                if (prefabs == null || prefabs.Length == 0)
-                {
-                    Debug.LogError("ProjectRootConnector prefab not found in Resources");
+                    if (prefabs == null || prefabs.Length == 0)
+                    {
+                        Debug.LogError("ProjectRootConnector prefab not found in Resources");
+                    }
+                    else if (prefabs.Length > 1)
+                    {
+                        Debug.LogError($"Multiple ProjectRootConnector prefabs found in Resources: {prefabs.Length}");
+                        projectRoot = Instantiate(prefabs[0]);
+                    }
+                    else
+                    {
+                        projectRoot = Instantiate(prefabs[0]);
+                    }
                 }
-                else if (prefabs.Length > 1)
+
+                if (projectRoot == null)
                 {
-                    Debug.LogError($"Multiple ProjectRootConnector prefabs found in Resources: {prefabs.Length}");
-                    projectRoot = Instantiate(prefabs[0]);
-                }
-                else
-                {
-                    projectRoot = Instantiate(prefabs[0]);
+                    Debug.LogError("ProjectRootConnector is null. Scene initialization will not run.");
+                    return;
                 }
             }
 
-            if (projectRoot == null)
+            // === App Lifecycle === //
             {
-                Debug.LogError("ProjectRootConnector is null. Scene initialization will not run.");
-                return;
+                if (projectRoot != null)
+                {
+                    if (!projectRoot.ProjectContext.TryGet(out lifecycle))
+                    {
+                        lifecycle = new AppLifecycleService();
+                        projectRoot.ProjectContext.Add(lifecycle);
+                    }
+                }
             }
 
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
-        public void OnDestroy() => 
+        private void OnApplicationFocus(bool hasFocus) =>
+            lifecycle?.RaiseFocusChanged(hasFocus, sender: this);
+
+        private void OnApplicationPause(bool pauseStatus) =>
+            lifecycle?.RaisePauseChanged(pauseStatus, sender: this);
+
+        public void OnDestroy() =>
             SceneManager.sceneLoaded -= OnSceneLoaded;
+
+        private void OnApplicationQuit() =>
+            lifecycle?.RaiseQuit(sender: this);
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
