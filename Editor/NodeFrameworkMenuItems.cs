@@ -603,58 +603,23 @@ namespace AbyssMoth
             return result;
         }
 
-        private static bool TryMoveAsset(string from, string to)
-        {
-            EnsureFolder(Path.GetDirectoryName(to)?.Replace("\\", "/"));
-
-            if (File.Exists(GetAbsolutePath(to)))
-            {
-                Debug.LogError($"Cannot move asset because destination already exists: {to}");
-                var existing = AssetDatabase.LoadAssetAtPath<GameObject>(to);
-                Selection.activeObject = existing;
-                EditorGUIUtility.PingObject(existing);
-                return false;
-            }
-
-            var error = AssetDatabase.MoveAsset(from, to);
-
-            if (!string.IsNullOrEmpty(error))
-            {
-                Debug.LogError($"MoveAsset failed: {error}\nFrom: {from}\nTo: {to}");
-                return false;
-            }
-
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            return true;
-        }
-
         private static GameObject CreateProjectRootPrefabAtPath(string prefabPath)
         {
             var go = new GameObject(defaultProjectRootPrefabName);
 
             try
             {
-                var local = go.GetComponent<LocalConnector>();
-
-                if (local == null)
-                {
-                    local = go.AddComponent<LocalConnector>();
-                }
-
                 var root = go.GetComponent<ProjectRootConnector>();
 
                 if (root == null)
-                {
-                    go.AddComponent<ProjectRootConnector>();
-                }
+                    root = go.AddComponent<ProjectRootConnector>();
 
-                local.CollectNodes();
+                root.OnValidate();
+                root.CollectNodes();
 
                 var prefab = PrefabUtility.SaveAsPrefabAsset(go, prefabPath);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
-
                 return prefab;
             }
             finally
@@ -837,10 +802,10 @@ namespace AbyssMoth
             if (string.IsNullOrEmpty(assetPath))
                 return;
 
-            var ok = AssetDatabase.DeleteAsset(assetPath);
+            if (assetPath.StartsWith("Packages/", StringComparison.Ordinal))
+                return;
 
-            if (!ok)
-                Debug.LogWarning($"Cannot delete asset (package may be immutable): {assetPath}");
+            AssetDatabase.DeleteAsset(assetPath);
         }
 
         private static void EnsureProjectRootPrefab(bool focusAsset)
@@ -969,10 +934,9 @@ namespace AbyssMoth
                     return;
                 }
 
-                if (from.StartsWith("Packages/", StringComparison.Ordinal))
-                    TryDeleteAsset(from);
-
-                return;
+                // if (from.StartsWith("Packages/", StringComparison.Ordinal))
+                //     TryDeleteAsset(from);
+                // return;
             }
 
             var error = AssetDatabase.MoveAsset(from, to);

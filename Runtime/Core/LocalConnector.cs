@@ -17,7 +17,7 @@ namespace AbyssMoth
 {
     [Preserve]
     [DisallowMultipleComponent]
-    [AddComponentMenu("AbyssMoth Node Framework/1 Local Connector")]
+    [AddComponentMenu("AbyssMoth Node Framework/Local Connector")]
     public class LocalConnector : MonoBehaviour, IOrder
     {
         [BoxGroup("Order")]

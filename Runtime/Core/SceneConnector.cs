@@ -14,7 +14,7 @@ namespace AbyssMoth
     [Preserve]
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-900)]
-    [AddComponentMenu("AbyssMoth Node Framework/0 Scene Connector")]
+    [AddComponentMenu("AbyssMoth Node Framework/Scene Connector")]
     public sealed class SceneConnector : MonoBehaviour
     {
         public event Action<SceneConnector> SceneInitialized;
