@@ -37,8 +37,13 @@ namespace AbyssMoth
         {
             var config = Resources.Load<ConnectorDebugConfig>(path: NodeFrameworkPaths.ConnectorDebugConfig);
 
-            return config != null 
-                ? config 
+            if (config != null)
+                return config;
+
+            config = Resources.Load<ConnectorDebugConfig>(path: NodeFrameworkPaths.PackageConnectorDebugConfig);
+
+            return config != null
+                ? config
                 : Resources.Load<ConnectorDebugConfig>(path: NodeFrameworkPaths.LegacyConnectorDebugConfig);
         }
     }

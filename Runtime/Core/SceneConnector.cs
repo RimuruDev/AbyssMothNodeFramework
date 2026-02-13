@@ -12,8 +12,9 @@ using System.Collections.Generic;
 namespace AbyssMoth
 {
     [Preserve]
-    [DefaultExecutionOrder(-900)]
     [DisallowMultipleComponent]
+    [DefaultExecutionOrder(-900)]
+    [AddComponentMenu("AbyssMoth Node Framework/Scene Connector")]
     public sealed class SceneConnector : MonoBehaviour
     {
         public event Action<SceneConnector> SceneInitialized;

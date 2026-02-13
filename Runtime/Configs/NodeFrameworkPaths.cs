@@ -6,9 +6,12 @@ namespace AbyssMoth
     public static class NodeFrameworkPaths
     {
         public const string ResourcesRoot = "AbyssMothNodeFramework";
-
         public const string ProjectRootConnector = ResourcesRoot + "/ProjectRootConnector";
         public const string ConnectorDebugConfig = ResourcesRoot + "/ConnectorDebugConfig";
+
+        public const string PackageResourcesRoot = "AbyssMothNodeFrameworkPackage";
+        public const string PackageProjectRootConnector = PackageResourcesRoot + "/ProjectRootConnector";
+        public const string PackageConnectorDebugConfig = PackageResourcesRoot + "/ConnectorDebugConfig";
 
         public const string LegacyProjectRootConnector = "ProjectRootConnector";
         public const string LegacyConnectorDebugConfig = "ConnectorDebugConfig";
