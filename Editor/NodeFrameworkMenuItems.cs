@@ -26,29 +26,30 @@ namespace AbyssMoth
         private const string defaultProjectRootPrefabPath = defaultResourcesPath + "/" + defaultProjectRootPrefabName + ".prefab";
         private const string defaultDebugConfigAssetName = "ConnectorDebugConfig";
         private const string defaultDebugConfigAssetPath = defaultResourcesPath + "/" + defaultDebugConfigAssetName + ".asset";
+       
+        private const string SceneConnectorDebugConfigFieldName = "debugConfig";
 
         [MenuItem(menuRootEdit + "Initialize Project", priority = 1)]
         public static void InitializeProject()
         {
-            EnsureFolder(defaultFrameworkRoot);
-            EnsureFolder(defaultResourcesRoot);
-            EnsureFolder(defaultResourcesPath);
-
-            EnsureProjectRootPrefab();
-            EnsureDebugConfig();
+            EnsureProjectArtifacts(focusAsset: true);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
 
-        private static void EnsureProjectRootPrefab()
+        private static void EnsureProjectRootPrefab(bool focusAsset)
         {
             var already = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
 
             if (already != null)
             {
-                Selection.activeObject = already;
-                EditorGUIUtility.PingObject(already);
+                if (focusAsset)
+                {
+                    Selection.activeObject = already;
+                    EditorGUIUtility.PingObject(already);
+                }
+
                 return;
             }
 
@@ -87,8 +88,12 @@ namespace AbyssMoth
             }
 
             var created = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
-            Selection.activeObject = created;
-            EditorGUIUtility.PingObject(created);
+
+            if (focusAsset && created != null)
+            {
+                Selection.activeObject = created;
+                EditorGUIUtility.PingObject(created);
+            }
         }
 
         private static void EnsureDebugConfig()
@@ -154,7 +159,13 @@ namespace AbyssMoth
                 var ok = AssetDatabase.CopyAsset(from, to);
 
                 if (!ok)
+                {
                     Debug.LogError($"CopyAsset failed\nFrom: {from}\nTo: {to}");
+                    return;
+                }
+
+                if (from.StartsWith("Packages/", StringComparison.Ordinal))
+                    TryDeleteAsset(from);
 
                 return;
             }
@@ -168,6 +179,8 @@ namespace AbyssMoth
         [MenuItem(menuRootEdit + "Validate Current Scenes", priority = 50)]
         public static void ValidateCurrentScenes()
         {
+            EnsureProjectArtifacts(focusAsset: false);
+            
             RunOnCurrentScenes(saveAfter: true, () =>
             {
                 var ok = true;
@@ -198,6 +211,8 @@ namespace AbyssMoth
         [MenuItem(menuRootEdit + "Validate All Build Scenes", priority = 51)]
         public static void ValidateAllBuildScenes()
         {
+            EnsureProjectArtifacts(focusAsset: false);
+            
             RunPreserveSceneSetup(() =>
             {
                 var scenes = EditorBuildSettings.scenes;
@@ -239,6 +254,8 @@ namespace AbyssMoth
         [MenuItem(menuRootEdit + "> Validate Full Current Scenes", priority = 49)]
         public static void ValidateFullCurrentScenes()
         {
+            EnsureProjectArtifacts(focusAsset: false);
+            
             RunOnCurrentScenes(saveAfter: true, () =>
             {
                 var ok = true;
@@ -266,6 +283,8 @@ namespace AbyssMoth
         [MenuItem(menuRootEdit + "> Validate Full All Build Scenes", priority = 50)]
         public static void ValidateFullAllBuildScenes()
         {
+            EnsureProjectArtifacts(focusAsset: false);
+            
             RunPreserveSceneSetup(() =>
             {
                 var scenes = EditorBuildSettings.scenes;
@@ -303,6 +322,8 @@ namespace AbyssMoth
         [MenuItem(menuRootEdit + "> Validate Prefabs (Collect LocalConnector Nodes)", priority = 52)]
         public static void ValidatePrefabs()
         {
+            EnsureProjectArtifacts(focusAsset: false);
+            
             var guids = AssetDatabase.FindAssets("t:Prefab");
 
             try
@@ -335,6 +356,8 @@ namespace AbyssMoth
         public static void ValidateThenRun()
         {
             var ok = true;
+            
+            EnsureProjectArtifacts(focusAsset: false);
 
             RunOnCurrentScenes(saveAfter: true, () =>
             {
@@ -364,6 +387,8 @@ namespace AbyssMoth
         [MenuItem(menuRootGameObject + "Create Scene Connector", priority = 10)]
         public static void CreateSceneConnector()
         {
+            EnsureProjectArtifacts(focusAsset: false);
+            
             var scene = SceneManager.GetActiveScene();
 
             if (!scene.isLoaded)
@@ -384,6 +409,8 @@ namespace AbyssMoth
 
             var go = new GameObject("SceneConnector");
             var connector = go.AddComponent<SceneConnector>();
+            
+            TryAssignDebugConfig(connector, scene);
 
             SceneManager.MoveGameObjectToScene(go, scene);
             Selection.activeGameObject = go;
@@ -458,8 +485,7 @@ namespace AbyssMoth
             Debug.Log($"Created ProjectRootConnector at: {prefabPath}");
         }
 
-        private static bool ValidateScene(Scene scene, bool autoFix, bool autoCollectSceneConnectors,
-            bool autoCollectLocalNodes)
+        private static bool ValidateScene(Scene scene, bool autoFix, bool autoCollectSceneConnectors, bool autoCollectLocalNodes)
         {
             var ok = true;
 
@@ -482,10 +508,12 @@ namespace AbyssMoth
 
                 var go = new GameObject("SceneConnector");
                 var connector = go.AddComponent<SceneConnector>();
+                TryAssignDebugConfig(connector, scene);
                 SceneManager.MoveGameObjectToScene(go, scene);
 
                 if (autoCollectSceneConnectors)
                 {
+                    TryAssignDebugConfig(connector, scene);
                     connector.CollectConnectors();
                     EditorUtility.SetDirty(connector);
                 }
@@ -578,7 +606,12 @@ namespace AbyssMoth
                 return;
             }
 
-            InitializeProject();
+            EnsureProjectArtifacts(focusAsset: false);
+
+            prefab = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
+
+            if (prefab == null)
+                ok = false;
 
             prefab = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
 
@@ -874,6 +907,105 @@ namespace AbyssMoth
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var full = Path.GetFullPath(Path.Combine(projectRoot, assetPath));
             return full;
+        }
+        
+        private static void EnsureProjectArtifacts(bool focusAsset)
+        {
+            EnsureFolder(defaultFrameworkRoot);
+            EnsureFolder(defaultResourcesRoot);
+            EnsureFolder(defaultResourcesPath);
+
+            EnsureProjectRootPrefab(focusAsset);
+            EnsureDebugConfig();
+
+            PurgePackageGeneratedAssets();
+        }
+
+        private static void PurgePackageGeneratedAssets()
+        {
+            PurgePackageProjectRootPrefabs();
+            PurgePackageDebugConfigs();
+        }
+
+        private static void PurgePackageProjectRootPrefabs()
+        {
+            var paths = FindProjectRootPrefabPaths();
+
+            for (var i = 0; i < paths.Count; i++)
+            {
+                var path = paths[i];
+
+                if (!path.StartsWith("Packages/", StringComparison.Ordinal))
+                    continue;
+
+                if (string.Equals(path, defaultProjectRootPrefabPath, StringComparison.Ordinal))
+                    continue;
+
+                if (!string.Equals(Path.GetFileName(path), defaultProjectRootPrefabName + ".prefab",
+                        StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                TryDeleteAsset(path);
+            }
+        }
+
+        private static void PurgePackageDebugConfigs()
+        {
+            var paths = FindAssetsPathsByType<ConnectorDebugConfig>();
+
+            for (var i = 0; i < paths.Count; i++)
+            {
+                var path = paths[i];
+
+                if (!path.StartsWith("Packages/", StringComparison.Ordinal))
+                    continue;
+
+                if (string.Equals(path, defaultDebugConfigAssetPath, StringComparison.Ordinal))
+                    continue;
+
+                if (!string.Equals(Path.GetFileName(path), defaultDebugConfigAssetName + ".asset",
+                        StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                TryDeleteAsset(path);
+            }
+        }
+
+        private static void TryDeleteAsset(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return;
+
+            var ok = AssetDatabase.DeleteAsset(assetPath);
+
+            if (!ok)
+                Debug.LogWarning($"Cannot delete asset (package may be immutable): {assetPath}");
+        }
+
+        private static void TryAssignDebugConfig(SceneConnector connector, Scene scene)
+        {
+            if (connector == null)
+                return;
+
+            var config = AssetDatabase.LoadAssetAtPath<ConnectorDebugConfig>(defaultDebugConfigAssetPath);
+            if (config == null)
+                return;
+
+            var so = new SerializedObject(connector);
+            var prop = so.FindProperty(SceneConnectorDebugConfigFieldName);
+            if (prop == null)
+                return;
+
+            if (prop.objectReferenceValue != null)
+                return;
+
+            prop.objectReferenceValue = config;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            EditorUtility.SetDirty(connector);
+
+            if (scene.IsValid() && scene.isLoaded)
+                EditorSceneManager.MarkSceneDirty(scene);
         }
     }
 }
