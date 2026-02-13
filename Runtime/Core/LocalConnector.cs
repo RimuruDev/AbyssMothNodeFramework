@@ -37,7 +37,7 @@ namespace AbyssMoth
 
 #if UNITY_EDITOR_MODE
         [BoxGroup("Debug")]
-        [SerializeField] private bool autoCollectOnValidate;
+        [SerializeField] private bool autoCollectOnValidate = true;
 
         [BoxGroup("Debug")]
         [SerializeField] private bool autoPruneMissingOnValidate = true;
@@ -305,25 +305,80 @@ namespace AbyssMoth
         }
 
         [Button("Collect Nodes - Собрать все нода. Жмякни если компоненты перестали выполнять Tick();")]
-        public void CollectNodes()
-        {
-            nodes.Clear();
-            collected.Clear();
+        public void CollectNodes() =>
+            CollectNodesCore(markDirtyIfChanged: !Application.isPlaying, rebuildCachesEvenIfSame: true);
 
+        private bool CollectNodesCore(bool markDirtyIfChanged, bool rebuildCachesEvenIfSame)
+        {
+            collected.Clear();
             GetComponentsInChildren(includeInactive: true, collected);
+
+            var next = new List<MonoBehaviour>(capacity: collected.Count);
 
             for (var i = 0; i < collected.Count; i++)
             {
                 var item = collected[i];
+
                 if (item == null)
                     continue;
 
                 if (item is ILocalConnectorNode)
-                    nodes.Add(item);
+                    next.Add(item);
             }
 
-            SortNodes();
+            next.Sort(CompareNodes);
+
+#if UNITY_EDITOR_MODE
+            if (!Application.isPlaying)
+            {
+                if (IsSameNodes(nodes, next))
+                    return false;
+
+                nodes.Clear();
+                nodes.AddRange(next);
+
+                if (markDirtyIfChanged)
+                {
+                    EditorUtility.SetDirty(this);
+
+                    if (gameObject.scene.IsValid())
+                        EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                }
+
+                RebuildCaches();
+                return true;
+            }
+#endif
+
+            if (IsSameNodes(nodes, next))
+            {
+                if (rebuildCachesEvenIfSame)
+                    RebuildCaches();
+
+                return false;
+            }
+
+            nodes.Clear();
+            nodes.AddRange(next);
             RebuildCaches();
+            return true;
+        }
+
+        private static bool IsSameNodes(List<MonoBehaviour> a, List<MonoBehaviour> b)
+        {
+            if (a == null || b == null)
+                return a == b;
+
+            if (a.Count != b.Count)
+                return false;
+
+            for (var i = 0; i < a.Count; i++)
+            {
+                if (!ReferenceEquals(a[i], b[i]))
+                    return false;
+            }
+
+            return true;
         }
 
 #if UNITY_EDITOR_MODE
@@ -334,12 +389,22 @@ namespace AbyssMoth
 
             if (autoCollectOnValidate)
             {
-                CollectNodes();
+                CollectNodesCore(markDirtyIfChanged: true, rebuildCachesEvenIfSame: false);
                 return;
             }
 
             if (autoPruneMissingOnValidate)
-                PruneMissingNodes(rebuildCaches: false);
+            {
+                var removed = PruneMissingNodes(rebuildCaches: false);
+
+                if (removed > 0)
+                {
+                    EditorUtility.SetDirty(this);
+
+                    if (gameObject.scene.IsValid())
+                        EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                }
+            }
         }
 #endif
 

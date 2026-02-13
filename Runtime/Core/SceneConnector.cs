@@ -31,7 +31,7 @@ namespace AbyssMoth
         [BoxGroup("Debug")]
         [SerializeField] private ConnectorDebugConfig debugConfig;
         [BoxGroup("Debug")]
-        [SerializeField] private bool autoCollectOnValidate;
+        [SerializeField] private bool autoCollectOnValidate = true;
         [BoxGroup("Debug")]
         [SerializeField, ReadOnly, TextArea(6, 30)] private string sceneIndexDump;
         [BoxGroup("Debug")]
@@ -69,12 +69,22 @@ namespace AbyssMoth
 
             if (autoCollectOnValidate)
             {
-                CollectConnectors();
+                CollectConnectorsCore(markDirtyIfChanged: true);
                 return;
             }
 
             if (autoPruneMissingOnValidate)
-                PruneMissingConnectors();
+            {
+                var removed = PruneMissingConnectors();
+
+                if (removed > 0)
+                {
+                    EditorUtility.SetDirty(this);
+
+                    if (gameObject.scene.IsValid())
+                        EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                }
+            }
         }
         
         [Button("Prune Missing Connectors")]
@@ -327,9 +337,12 @@ namespace AbyssMoth
         }
 
         [Button("Collect LocalConnectors From Scene")]
-        public void CollectConnectors()
+        public void CollectConnectors() =>
+            CollectConnectorsCore(markDirtyIfChanged: !Application.isPlaying);
+
+        private bool CollectConnectorsCore(bool markDirtyIfChanged)
         {
-            connectors.Clear();
+            var next = new List<LocalConnector>(capacity: 64);
 
             var scene = gameObject.scene;
             var found = FindObjectsByType<LocalConnector>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -347,10 +360,44 @@ namespace AbyssMoth
                 if (item.GetComponentInParent<ProjectRootConnector>(includeInactive: true) != null)
                     continue;
 
-                connectors.Add(item);
+                next.Add(item);
             }
 
-            connectors.Sort(CompareConnectors);
+            next.Sort(CompareConnectors);
+
+            if (IsSameConnectors(connectors, next))
+                return false;
+
+            connectors.Clear();
+            connectors.AddRange(next);
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying && markDirtyIfChanged)
+            {
+                EditorUtility.SetDirty(this);
+
+                if (gameObject.scene.IsValid())
+                    EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            }
+#endif
+            return true;
+        }
+
+        private static bool IsSameConnectors(List<LocalConnector> a, List<LocalConnector> b)
+        {
+            if (a == null || b == null)
+                return a == b;
+
+            if (a.Count != b.Count)
+                return false;
+
+            for (var i = 0; i < a.Count; i++)
+            {
+                if (!ReferenceEquals(a[i], b[i]))
+                    return false;
+            }
+
+            return true;
         }
 
         private void RegisterActiveUnbakedConnectors()
