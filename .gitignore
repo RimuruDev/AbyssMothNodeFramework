@@ -73,3 +73,12 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+Assets/AbyssMothNodeFramework/Resources/AbyssMothNodeFramework.meta
+Assets/AbyssMothNodeFramework/Resources/AbyssMothNodeFramework/
+
+Resources/AbyssMothNodeFramework.meta
+Resources/AbyssMothNodeFramework/ConnectorDebugConfig.asset
+Resources/AbyssMothNodeFramework/ConnectorDebugConfig.asset.meta
+Resources/AbyssMothNodeFramework/ProjectRootConnector.prefab
+Resources/AbyssMothNodeFramework/ProjectRootConnector.prefab.meta
