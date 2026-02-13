@@ -11,6 +11,7 @@ namespace AbyssMoth
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(LocalConnector))]
+    [AddComponentMenu("AbyssMoth Node Framework/Entity Key Behaviour")]
     public sealed class EntityKeyBehaviour : MonoBehaviour
     {
         [BoxGroup("Entity")]
