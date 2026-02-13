@@ -26,8 +26,5 @@
     "email": "rimuru.dev@gmail.com",
     "url": "https://github.com/RimuruDev"
   },
-  "license": "MIT",
-  "dependencies": {
-    "com.dbrizov.naughtyattributes": "2.1.4"
-  }
+  "license": "MIT"
 }
