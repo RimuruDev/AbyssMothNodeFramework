@@ -35,8 +35,11 @@ namespace AbyssMoth
 
         public static ConnectorDebugConfig TryLoadDefault()
         {
-            var config = Resources.Load<ConnectorDebugConfig>(path: "ConnectorDebugConfig");
-            return config;
+            var config = Resources.Load<ConnectorDebugConfig>(path: NodeFrameworkPaths.ConnectorDebugConfig);
+
+            return config != null 
+                ? config 
+                : Resources.Load<ConnectorDebugConfig>(path: NodeFrameworkPaths.LegacyConnectorDebugConfig);
         }
     }
 }

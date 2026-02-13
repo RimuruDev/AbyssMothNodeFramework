@@ -19,22 +19,20 @@ namespace AbyssMoth
             {
                 if (projectRoot == null)
                 {
-                    var prefabs = Resources.LoadAll<ProjectRootConnector>(path: "");
+                    var prefab = Resources.Load<ProjectRootConnector>(path: NodeFrameworkPaths.ProjectRootConnector);
 
-                    if (prefabs == null || prefabs.Length == 0)
+                    if (prefab == null)
+                        prefab = Resources.Load<ProjectRootConnector>(path: NodeFrameworkPaths.LegacyProjectRootConnector);
+
+                    if (prefab == null)
                     {
                         Debug.LogError("ProjectRootConnector prefab not found in Resources");
+                        return;
                     }
-                    else if (prefabs.Length > 1)
-                    {
-                        Debug.LogError($"Multiple ProjectRootConnector prefabs found in Resources: {prefabs.Length}");
-                        projectRoot = Instantiate(prefabs[0]);
-                    }
-                    else
-                    {
-                        projectRoot = Instantiate(prefabs[0]);
-                    }
+
+                    projectRoot = Instantiate(prefab);
                 }
+
 
                 if (projectRoot == null)
                 {
