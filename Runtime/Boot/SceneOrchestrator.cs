@@ -22,6 +22,9 @@ namespace AbyssMoth
                     var prefab = Resources.Load<ProjectRootConnector>(path: NodeFrameworkPaths.ProjectRootConnector);
 
                     if (prefab == null)
+                        prefab = Resources.Load<ProjectRootConnector>(path: NodeFrameworkPaths.PackageProjectRootConnector);
+
+                    if (prefab == null)
                         prefab = Resources.Load<ProjectRootConnector>(path: NodeFrameworkPaths.LegacyProjectRootConnector);
 
                     if (prefab == null)
@@ -98,7 +101,7 @@ namespace AbyssMoth
                 {
                     if (found != null)
                     {
-                        Debug.LogError($"Two SceneConnector in scene: {scene.name}", this);
+                        Debug.LogError($"Two SceneConnector in scene: {scene.name}", context: this);
                         return;
                     }
 

@@ -535,7 +535,7 @@ namespace AbyssMoth
                     continue;
                 }
 
-                var locals = root.GetComponentsInChildren<LocalConnector>(true);
+                var locals = root.GetComponentsInChildren<LocalConnector>(includeInactive: true);
 
                 for (var j = 0; j < locals.Length; j++)
                 {
@@ -551,7 +551,7 @@ namespace AbyssMoth
                         continue;
                     }
 
-                    if (local.GetComponentInParent<ProjectRootConnector>(true) != null)
+                    if (local.GetComponentInParent<ProjectRootConnector>(includeInactive: true) != null)
                     {
                         continue;
                     }
@@ -566,30 +566,23 @@ namespace AbyssMoth
 
         private static void EnsureProjectRootExists(bool autoFix, ref bool ok)
         {
-            var allInFrameworkResources = Resources.LoadAll<ProjectRootConnector>("AbyssMothNodeFramework");
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
 
-            if (allInFrameworkResources != null && allInFrameworkResources.Length > 1)
-            {
-                ok = false;
-                Debug.LogError($"Multiple ProjectRootConnector prefabs found in Resources/AbyssMothNodeFramework: {allInFrameworkResources.Length}");
-                return;
-            }
-
-            if (allInFrameworkResources != null && allInFrameworkResources.Length == 1)
+            if (prefab != null)
                 return;
 
             if (!autoFix)
             {
                 ok = false;
-                Debug.LogError("ProjectRootConnector prefab not found in Resources/AbyssMothNodeFramework. Run Initialize Project.");
+                Debug.LogError("ProjectRootConnector prefab not found in project Assets. Run Initialize Project.");
                 return;
             }
 
             InitializeProject();
 
-            allInFrameworkResources = Resources.LoadAll<ProjectRootConnector>("AbyssMothNodeFramework");
+            prefab = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
 
-            if (allInFrameworkResources == null || allInFrameworkResources.Length != 1)
+            if (prefab == null)
                 ok = false;
         }
 
@@ -665,7 +658,7 @@ namespace AbyssMoth
                     continue;
                 }
 
-                var found = root.GetComponentsInChildren<SceneConnector>(true);
+                var found = root.GetComponentsInChildren<SceneConnector>(includeInactive: true);
 
                 for (var j = 0; j < found.Length; j++)
                 {
