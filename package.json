@@ -1,0 +1,33 @@
+{
+  "name": "com.rimurudev.abyssmoth-node-framework",
+  "version": "2.0.0",
+  "displayName": "AbyssMoth Node Framework",
+  "description": "A node-based framework for rapid Android game development with a touch of ECS. Provides LocalConnector, SceneConnector, entity indexing, and editor tools for teams with artists and programmers.",
+  "unity": "2023.3",
+  "unityRelease": "0f1",
+  "documentationUrl": "https://github.com/RimuruDev/AbyssMothNodeFramework/wiki",
+  "changelogUrl": "https://github.com/RimuruDev/AbyssMothNodeFramework/releases",
+  "licensesUrl": "https://github.com/RimuruDev/AbyssMothNodeFramework/blob/main/LICENSE",
+  "keywords": [
+    "unity",
+    "framework",
+    "nodes",
+    "ecs",
+    "android",
+    "rimurudev",
+    "abyssmoth",
+    "connector",
+    "entity",
+    "prefabs",
+    "editor-tools"
+  ],
+  "author": {
+    "name": "RimuruDev",
+    "email": "rimuru.dev@gmail.com",
+    "url": "https://github.com/RimuruDev"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "com.dbrizov.naughtyattributes": "2.1.4"
+  }
+}
