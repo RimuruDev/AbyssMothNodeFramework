@@ -1,5 +1,5 @@
 {
-    "name": "AMNF.Editor",
+    "name": "AMNF.Benchmark",
     "rootNamespace": "AbyssMoth",
     "references": [
         "GUID:adbda3056052341eba6768c10b1769d6",
