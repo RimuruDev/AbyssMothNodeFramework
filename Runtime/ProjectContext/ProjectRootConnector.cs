@@ -7,21 +7,24 @@ namespace AbyssMoth
     [SelectionBase]
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-1100)]
-    [RequireComponent(typeof(LocalConnector))]
-    public sealed class ProjectRootConnector : MonoBehaviour
+    public sealed class ProjectRootConnector : LocalConnector
     {
-        private LocalConnector connector;
-
         public ServiceRegistry ProjectContext { get; private set; }
 
-        public void Awake()
+        public override void OnValidate()
+        {
+            Order = -1;
+            base.OnValidate();
+        }
+
+        private void Awake()
         {
             ProjectContext = new ServiceRegistry();
 
-            connector = GetComponent<LocalConnector>();
-            connector.Execute(ProjectContext);
+            Debug.Log($"<color=magenta> <color=red>></color> ProjectRootConnector.Execute()</color>");
+            Execute(ProjectContext, sender: this);
 
-            transform.SetParent(p: null);
+            transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
         }
     }

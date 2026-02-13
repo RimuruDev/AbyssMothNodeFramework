@@ -418,7 +418,7 @@ namespace AbyssMoth
                 return;
 
             sceneIndex.Register(connector);
-            connector.Execute(sceneContext);
+            connector.Execute(sceneContext, sender: this);
 
             var index = GetInsertIndex(connector);
             dynamicConnectors.Insert(index, connector);
@@ -487,7 +487,7 @@ namespace AbyssMoth
                     continue;
 
                 if (connector.isActiveAndEnabled)
-                    connector.Execute(sceneContext);
+                    connector.Execute(sceneContext, sender: this);
             }
         }
         

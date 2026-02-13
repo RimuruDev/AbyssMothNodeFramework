@@ -12,11 +12,16 @@ namespace AbyssMoth
 {
     [Preserve]
     [DisallowMultipleComponent]
-    public sealed class LocalConnector : MonoBehaviour, IOrder
+    public class LocalConnector : MonoBehaviour, IOrder
     {
         [BoxGroup("Order")]
         [SerializeField, Min(-1)] private int order;
-        public int Order => order;
+       
+        public virtual int Order 
+        { 
+            get => order; 
+            protected set => order = value; 
+        }
 
         [BoxGroup("State")]
         [SerializeField] private bool enabledTicks = true;
@@ -134,7 +139,7 @@ namespace AbyssMoth
         internal bool IsStaticFor(int sceneHandle) => 
             staticSceneHandle == sceneHandle && staticSceneHandle != -1;
 
-        public void Execute(ServiceRegistry registry)
+        public void Execute(ServiceRegistry registry, Object sender)
         {
             if (disposed)
                 return;
@@ -143,6 +148,8 @@ namespace AbyssMoth
                 return;
 
             executed = true;
+            
+            Debug.Log($"<color=magenta> <color=red>></color> LocalConnector.Execute -> <color=yellow>{sender?.GetType().Name}</color></color>");
 
             PruneMissingNodes();
             SortNodes();
@@ -325,7 +332,7 @@ namespace AbyssMoth
         }
 
 #if UNITY_EDITOR
-        public void OnValidate()
+        public virtual void OnValidate()
         {
             if (Application.isPlaying)
                 return;
