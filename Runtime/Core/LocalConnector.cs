@@ -12,7 +12,7 @@ namespace AbyssMoth
 {
     [Preserve]
     [DisallowMultipleComponent]
-    public sealed class LocalConnector : MonoBehaviour, ILocalConnectorOrder
+    public sealed class LocalConnector : MonoBehaviour, IOrder
     {
         [BoxGroup("Order")]
         [SerializeField, Min(-1)] private int order;
@@ -65,7 +65,7 @@ namespace AbyssMoth
                         continue;
                     }
 
-                    var nodeOrder = n is IConnectorOrder o ? o.Order : 0;
+                    var nodeOrder = n is IOrder o ? o.Order : 0;
                     sb.AppendLine($"{nodeOrder} | {n.GetType().Name}");
                 }
 
@@ -354,8 +354,8 @@ namespace AbyssMoth
             if (b == null)
                 return -1;
 
-            var orderA = a is IConnectorOrder oa ? oa.Order : 0;
-            var orderB = b is IConnectorOrder ob ? ob.Order : 0;
+            var orderA = a is IOrder oa ? oa.Order : 0;
+            var orderB = b is IOrder ob ? ob.Order : 0;
 
             if (orderA != orderB)
                 return orderA.CompareTo(orderB);

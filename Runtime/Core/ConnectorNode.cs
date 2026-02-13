@@ -4,7 +4,7 @@ using NaughtyAttributes;
 namespace AbyssMoth
 {
     public abstract class ConnectorNode : MonoBehaviour, 
-        ILocalConnectorNode, IConnectorOrder, 
+        ILocalConnectorNode, IOrder, 
         IBind, IConstruct, IBeforeInit, IInit, IAfterInit, 
         ITick, IFixedTick, ILateTick, IPausable, IDispose
     {

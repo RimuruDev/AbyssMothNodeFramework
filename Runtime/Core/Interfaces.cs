@@ -4,12 +4,7 @@ namespace AbyssMoth
 {
     public interface ILocalConnectorNode { }
 
-    public interface IConnectorOrder
-    {
-        public int Order { get; }
-    }
-    
-    public interface ILocalConnectorOrder
+    public interface IOrder
     {
         public int Order { get; }
     }

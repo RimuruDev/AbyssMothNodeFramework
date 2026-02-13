@@ -502,8 +502,8 @@ namespace AbyssMoth
             if (b == null)
                 return -1;
 
-            var oa = a is ILocalConnectorOrder la ? la.Order : 0;
-            var ob = b is ILocalConnectorOrder lb ? lb.Order : 0;
+            var oa = a is IOrder la ? la.Order : 0;
+            var ob = b is IOrder lb ? lb.Order : 0;
 
             if (oa != ob)
                 return oa.CompareTo(ob);
