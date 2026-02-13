@@ -16,11 +16,11 @@ namespace AbyssMoth
     {
         [BoxGroup("Order")]
         [SerializeField, Min(-1)] private int order;
-       
-        public virtual int Order 
-        { 
-            get => order; 
-            protected set => order = value; 
+
+        public virtual int Order
+        {
+            get => order;
+            protected set => order = value;
         }
 
         [BoxGroup("State")]
@@ -32,9 +32,11 @@ namespace AbyssMoth
 #if UNITY_EDITOR
         [BoxGroup("Debug")]
         [SerializeField] private bool autoCollectOnValidate;
+
         [BoxGroup("Debug")]
         [SerializeField] private bool autoPruneMissingOnValidate = true;
 #endif
+
         private readonly List<MonoBehaviour> collected = new(capacity: 64);
 
         private bool executed;
@@ -43,18 +45,18 @@ namespace AbyssMoth
         private bool disposed;
 
         public bool EnabledTicks => enabledTicks;
-        
+
         public IReadOnlyList<MonoBehaviour> Nodes => nodes;
-        
-        private List<ITick> tickCache = new();
-        private List<MonoBehaviour> tickMonos = new();
 
-        private List<IFixedTick> fixedTickCache = new();
-        private List<MonoBehaviour> fixedTickMonos = new();
+        private readonly List<ITick> tickCache = new();
+        private readonly List<MonoBehaviour> tickMonos = new();
 
-        private List<ILateTick> lateTickCache = new();
-        private List<MonoBehaviour> lateTickMonos = new();
-        
+        private readonly List<IFixedTick> fixedTickCache = new();
+        private readonly List<MonoBehaviour> fixedTickMonos = new();
+
+        private readonly List<ILateTick> lateTickCache = new();
+        private readonly List<MonoBehaviour> lateTickMonos = new();
+
 #if UNITY_EDITOR
         private ConnectorDebugConfig debugConfig;
 
@@ -63,7 +65,8 @@ namespace AbyssMoth
         [ShowNativeProperty] private bool DynamicRegistered => dynamicRegistered;
         [ShowNativeProperty] private bool IsStaticForCurrentScene => IsStaticFor(gameObject.scene.handle);
 
-        [ShowNativeProperty] private string NodeOrder
+        [ShowNativeProperty]
+        private string NodeOrder
         {
             get
             {
@@ -86,31 +89,27 @@ namespace AbyssMoth
                 return sb.ToString();
             }
         }
-        
+
         [Button("Prune Missing Nodes")]
         private void PruneMissingNodesButton()
         {
             if (Application.isPlaying)
                 return;
 
-            var removed = PruneMissingNodes();
+            Undo.RecordObject(this, "Prune Missing Nodes");
+
+            var removed = PruneMissingNodes(rebuildCaches: false);
             if (removed <= 0)
                 return;
 
-            Undo.RecordObject(this, "Prune Missing Nodes");
             EditorUtility.SetDirty(this);
             EditorSceneManager.MarkAllScenesDirty();
         }
 #endif
+
         public void OnEnable()
         {
             if (!Application.isPlaying)
-                return;
-
-            if (dynamicRegistered)
-                return;
-
-            if (IsStaticFor(gameObject.scene.handle))
                 return;
 
             if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector))
@@ -119,10 +118,21 @@ namespace AbyssMoth
             if (!sceneConnector.IsInitialized)
                 return;
 
+            var sceneHandle = gameObject.scene.handle;
+
+            if (IsStaticFor(sceneHandle))
+            {
+                Execute(sceneConnector.SceneContext, sender: sceneConnector);
+                return;
+            }
+
+            if (dynamicRegistered)
+                return;
+
             sceneConnector.RegisterAndExecute(this);
             dynamicRegistered = true;
         }
-        
+
         public void OnDisable()
         {
             if (!Application.isPlaying)
@@ -136,35 +146,21 @@ namespace AbyssMoth
             if (!Application.isPlaying)
                 return;
 
-            if (disposed)
-                return;
-
-            TryUnregisterFromScene(force: true);
+            Dispose();
         }
 
-        internal void MarkStatic(int sceneHandle) => 
+        internal void MarkStatic(int sceneHandle) =>
             staticSceneHandle = sceneHandle;
 
-        internal bool IsStaticFor(int sceneHandle) => 
+        internal bool IsStaticFor(int sceneHandle) =>
             staticSceneHandle == sceneHandle && staticSceneHandle != -1;
 
-        public void Execute(ServiceRegistry registry, Object sender)
+        public void Execute(ServiceRegistry registry, Object sender = null)
         {
-            if (disposed || executed) return;
+            if (disposed || executed)
+                return;
+
             executed = true;
-
-#if UNITY_EDITOR
-            if (debugConfig != null && debugConfig.Enabled && debugConfig.LogLocalConnectorExecute)
-            {
-                var senderName = sender != null ? sender.GetType().Name : "Null";
-                Debug.Log($"<color=magenta> <color=red>></color> LocalConnector.Execute -> <color=yellow>{senderName}</color></color>");
-            }
-#endif
-            
-            PruneMissingNodes();
-            SortNodes();
-
-            RebuildCaches();
 
 #if UNITY_EDITOR
             debugConfig = null;
@@ -176,9 +172,16 @@ namespace AbyssMoth
                     ValidateUnityCallbacks();
 
                 if (debugConfig.LogLocalConnectorExecute)
-                    Debug.Log($"LocalConnector Execute: {name}", this);
+                {
+                    var senderName = sender != null ? sender.GetType().Name : "Null";
+                    Debug.Log($"LocalConnector Execute: {name} -> {senderName}", this);
+                }
             }
 #endif
+
+            PruneMissingNodes(rebuildCaches: false);
+            SortNodes();
+            RebuildCaches();
 
             CallBind(registry);
             CallConstruct(registry);
@@ -191,7 +194,7 @@ namespace AbyssMoth
         {
             if (!enabledTicks || disposed)
                 return;
-            
+
             StepLogger(nameof(Tick));
 
             for (var i = 0; i < tickCache.Count; i++)
@@ -203,9 +206,9 @@ namespace AbyssMoth
 
         public void FixedTick(float fixedDeltaTime)
         {
-            if (!enabledTicks || disposed) 
+            if (!enabledTicks || disposed)
                 return;
-            
+
             StepLogger(nameof(FixedTick));
 
             for (var i = 0; i < fixedTickCache.Count; i++)
@@ -217,9 +220,9 @@ namespace AbyssMoth
 
         public void LateTick(float deltaTime)
         {
-            if (!enabledTicks || disposed) 
+            if (!enabledTicks || disposed)
                 return;
-            
+
             StepLogger(nameof(LateTick));
 
             for (var i = 0; i < lateTickCache.Count; i++)
@@ -263,13 +266,12 @@ namespace AbyssMoth
         {
             if (!enabledTicks)
                 return;
-            
+
             InternalSetEnabledTicks(false, sender);
 
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-
                 if (node == null)
                     continue;
 
@@ -277,23 +279,22 @@ namespace AbyssMoth
                     pausable.OnPauseRequest(sender);
             }
         }
-        
+
         public void OnResumeRequest(Object sender = null)
         {
             if (enabledTicks)
                 return;
-            
+
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-
                 if (node == null)
                     continue;
 
                 if (node is IPausable pausable)
                     pausable.OnResumeRequest(sender);
             }
-            
+
             InternalSetEnabledTicks(true, sender);
         }
 
@@ -302,15 +303,15 @@ namespace AbyssMoth
         {
             nodes.Clear();
             collected.Clear();
+
             GetComponentsInChildren(includeInactive: true, collected);
 
             for (var i = 0; i < collected.Count; i++)
             {
                 var item = collected[i];
-
                 if (item == null)
                     continue;
-                
+
                 if (item is ILocalConnectorNode)
                     nodes.Add(item);
             }
@@ -332,9 +333,10 @@ namespace AbyssMoth
             }
 
             if (autoPruneMissingOnValidate)
-                PruneMissingNodes();
+                PruneMissingNodes(rebuildCaches: false);
         }
 #endif
+
         private void SortNodes() =>
             nodes.Sort(CompareNodes);
 
@@ -363,7 +365,6 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-
                 if (node == null)
                     continue;
 
@@ -377,10 +378,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                
                 if (node == null)
                     continue;
-                
+
                 if (node is IConstruct construct)
                     construct.Construct(registry);
             }
@@ -391,10 +391,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                
                 if (node == null)
                     continue;
-                
+
                 if (node is IBeforeInit step)
                     step.BeforeInit();
             }
@@ -405,15 +404,12 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                
                 if (node == null)
                     continue;
+
 #if UNITY_EDITOR
-                if (debugConfig != null && debugConfig.Enabled && debugConfig.LogPhaseCalls)
-                {
-                    if (node != null && node is IInit)
-                        Debug.Log($"Init: {name} -> {node.GetType().Name}", node);
-                }
+                if (debugConfig != null && debugConfig.Enabled && debugConfig.LogPhaseCalls && node is IInit)
+                    Debug.Log($"Init: {name} -> {node.GetType().Name}", node);
 #endif
 
                 if (node is IInit step)
@@ -426,10 +422,9 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                
                 if (node == null)
                     continue;
-                
+
                 if (node is IAfterInit step)
                     step.AfterInit();
             }
@@ -448,7 +443,7 @@ namespace AbyssMoth
 
             return false;
         }
-        
+
         private void TryUnregisterFromScene(bool force)
         {
             if (!Application.isPlaying)
@@ -469,8 +464,8 @@ namespace AbyssMoth
             sceneConnector.Unregister(this);
             dynamicRegistered = false;
         }
-        
-        private int PruneMissingNodes()
+
+        private int PruneMissingNodes(bool rebuildCaches)
         {
             var removed = 0;
 
@@ -483,27 +478,27 @@ namespace AbyssMoth
                 removed++;
             }
 
-            if (removed > 0) 
+            if (removed > 0 && rebuildCaches)
                 RebuildCaches();
-            
+
             return removed;
         }
-        
+
         private void RebuildCaches()
         {
             tickCache.Clear();
             tickMonos.Clear();
-            
+
             fixedTickCache.Clear();
             fixedTickMonos.Clear();
-            
+
             lateTickCache.Clear();
             lateTickMonos.Clear();
 
-            for (int i = 0; i < nodes.Count; i++)
+            for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                if (node == null) 
+                if (node == null)
                     continue;
 
                 if (node is ITick t)
@@ -511,13 +506,13 @@ namespace AbyssMoth
                     tickCache.Add(t);
                     tickMonos.Add(node);
                 }
-                
+
                 if (node is IFixedTick ft)
                 {
                     fixedTickCache.Add(ft);
                     fixedTickMonos.Add(node);
                 }
-                
+
                 if (node is ILateTick lt)
                 {
                     lateTickCache.Add(lt);
@@ -531,22 +526,36 @@ namespace AbyssMoth
             enabledTicks = value;
 
 #if UNITY_EDITOR
-            if (sender)
+            if (sender != null)
             {
                 Debug.Log(!enabledTicks
-                    ? $"<color=yellow>-> Pause | Sender: <color=green>{sender.GetType().Name}.cs</color></color>"
-                    : $"<color=yellow>-> Resume | Sender: <color=green>{sender.GetType().Name}.cs</color></color>");
+                    ? $"-> Pause | Sender: {sender.GetType().Name}.cs"
+                    : $"-> Resume | Sender: {sender.GetType().Name}.cs");
             }
 #endif
         }
-        
+
+        private void StepLogger(string label)
+        {
+#if UNITY_EDITOR
+            if (debugConfig == null || !debugConfig.Enabled || !debugConfig.LogTicks)
+                return;
+
+            var filter = debugConfig.LogTicksOnlyForConnectorName;
+
+            if (!string.IsNullOrEmpty(filter) && !string.Equals(filter, name))
+                return;
+
+            Debug.Log($"{label}: {name}", this);
+#endif
+        }
+
 #if UNITY_EDITOR
         private void ValidateUnityCallbacks()
         {
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-
                 if (node == null)
                     continue;
 
@@ -554,10 +563,6 @@ namespace AbyssMoth
 
                 if (HasUnityCallback(type, "Awake") ||
                     HasUnityCallback(type, "Start") ||
-                    
-                    /*HasUnityCallback(type, "OnEnable") ||
-                    HasUnityCallback(type, "OnDisable") ||*/
-                    
                     HasUnityCallback(type, "Update") ||
                     HasUnityCallback(type, "FixedUpdate") ||
                     HasUnityCallback(type, "LateUpdate"))
@@ -567,7 +572,6 @@ namespace AbyssMoth
             }
         }
 
-#if UNITY_EDITOR
         private static bool HasUnityCallback(System.Type type, string methodName)
         {
             var current = type;
@@ -589,22 +593,5 @@ namespace AbyssMoth
             return false;
         }
 #endif
-
-        private void StepLogger(string label)
-        {
-#if UNITY_EDITOR
-            if (debugConfig != null && debugConfig.Enabled && debugConfig.LogTicks)
-            {
-                var filter = debugConfig.LogTicksOnlyForConnectorName;
-
-                if (!string.IsNullOrEmpty(filter) && !string.Equals(filter, name)) { }
-                else
-                    Debug.Log($"{label}: {name}", context: this);
-            }
-#endif
-        }
-
-#endif
-
     }
 }
