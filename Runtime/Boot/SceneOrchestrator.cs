@@ -55,6 +55,16 @@ namespace AbyssMoth
                 }
             }
 
+            // === App SceneTransition === //
+            {
+                if (!projectRoot.ProjectContext.TryGet(out SceneTransitionService transitions))
+                {
+                    transitions = new SceneTransitionService(runner: this, Constants.EmptySceneTransitionName);
+                    projectRoot.ProjectContext.Add(transitions);
+                }
+            }
+
+
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
@@ -105,6 +115,9 @@ namespace AbyssMoth
             }
 
 #if UNITY_EDITOR
+            if (string.Equals(scene.name, Constants.EmptySceneTransitionName))
+                return;
+
             Debug.LogWarning($"SceneConnector not found in scene: {scene.name}");
 #endif
         }

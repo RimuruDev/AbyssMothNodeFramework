@@ -1,7 +1,8 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Scripting;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace AbyssMoth
 {
@@ -11,17 +12,16 @@ namespace AbyssMoth
         private static readonly IReadOnlyList<LocalConnector> emptyConnectors = Array.Empty<LocalConnector>();
 
         private readonly Dictionary<int, LocalConnector> idMap = new(capacity: 128);
-
         private readonly Dictionary<string, List<LocalConnector>> tagMap = new(capacity: 64, comparer: StringComparer.Ordinal);
-
         private readonly Dictionary<Type, List<MonoBehaviour>> nodeMap = new(capacity: 256);
 
         private readonly HashSet<LocalConnector> registered = new(ReferenceComparer<LocalConnector>.Instance);
-
         private readonly HashSet<int> reservedIds = new();
-        
+
+        private readonly Dictionary<Type, List<Type>> assignableKeysCache = new();
+
         private int nextRuntimeId = 1;
-        
+
         public int RegisteredCount => registered.Count;
         public int IdCount => idMap.Count;
         public int TagCount => tagMap.Count;
@@ -62,10 +62,11 @@ namespace AbyssMoth
             }
 
             nextRuntimeId = max + 1;
+
             if (nextRuntimeId < 1)
                 nextRuntimeId = 1;
         }
-        
+
         public int AllocateId()
         {
             if (nextRuntimeId < 1)
@@ -80,7 +81,7 @@ namespace AbyssMoth
             reservedIds.Add(id);
             return id;
         }
-        
+
         public void Clear()
         {
             idMap.Clear();
@@ -88,7 +89,10 @@ namespace AbyssMoth
             nodeMap.Clear();
             registered.Clear();
             reservedIds.Clear();
+
             nextRuntimeId = 1;
+
+            InvalidateAssignableCache();
         }
 
         public void Register(LocalConnector connector)
@@ -101,6 +105,8 @@ namespace AbyssMoth
 
             RegisterEntityKey(connector);
             RegisterNodes(connector);
+
+            InvalidateAssignableCache();
         }
 
         public void Unregister(LocalConnector connector)
@@ -113,8 +119,11 @@ namespace AbyssMoth
 
             UnregisterEntityKey(connector);
             UnregisterNodes(connector);
+
+            InvalidateAssignableCache();
         }
 
+        [SuppressMessage("ReSharper", "RedundantAssignment")]
         public bool TryGetById(int id, out LocalConnector connector)
         {
             if (!idMap.TryGetValue(id, out connector))
@@ -178,14 +187,13 @@ namespace AbyssMoth
 
             var requestedType = typeof(T);
 
-            if (nodeMap.TryGetValue(requestedType, out var list) && list != null)
+            if (nodeMap.TryGetValue(requestedType, out var direct) && direct != null)
             {
-                PruneDeadNodes(list);
+                PruneDeadNodes(direct);
 
-                for (var i = 0; i < list.Count; i++)
+                for (var i = 0; i < direct.Count; i++)
                 {
-                    var item = list[i];
-
+                    var item = direct[i];
                     if (item == null)
                         continue;
 
@@ -200,22 +208,23 @@ namespace AbyssMoth
             if (!includeDerived)
                 return false;
 
-            foreach (var kv in nodeMap)
+            var keys = GetAssignableKeys(requestedType);
+
+            for (var i = 0; i < keys.Count; i++)
             {
-                if (!requestedType.IsAssignableFrom(kv.Key))
+                var keyType = keys[i];
+
+                if (keyType == requestedType)
                     continue;
 
-                var nodes = kv.Value;
-
-                if (nodes == null)
+                if (!nodeMap.TryGetValue(keyType, out var list) || list == null)
                     continue;
 
-                PruneDeadNodes(nodes);
+                PruneDeadNodes(list);
 
-                for (var i = 0; i < nodes.Count; i++)
+                for (var j = 0; j < list.Count; j++)
                 {
-                    var item = nodes[i];
-
+                    var item = list[j];
                     if (item == null)
                         continue;
 
@@ -229,7 +238,7 @@ namespace AbyssMoth
 
             return false;
         }
-        
+
         public int GetNodes<T>(List<T> buffer, bool includeDerived = true) where T : class
         {
             if (buffer == null)
@@ -237,12 +246,15 @@ namespace AbyssMoth
 
             buffer.Clear();
 
-            if (nodeMap.TryGetValue(typeof(T), out var list) && list != null)
-            {
-                for (var i = 0; i < list.Count; i++)
-                {
-                    var item = list[i];
+            var requestedType = typeof(T);
 
+            if (nodeMap.TryGetValue(requestedType, out var direct) && direct != null)
+            {
+                PruneDeadNodes(direct);
+
+                for (var i = 0; i < direct.Count; i++)
+                {
+                    var item = direct[i];
                     if (item == null)
                         continue;
 
@@ -254,22 +266,23 @@ namespace AbyssMoth
             if (!includeDerived)
                 return buffer.Count;
 
-            foreach (var kv in nodeMap)
+            var keys = GetAssignableKeys(requestedType);
+
+            for (var i = 0; i < keys.Count; i++)
             {
-                if (kv.Key == typeof(T))
+                var keyType = keys[i];
+
+                if (keyType == requestedType)
                     continue;
 
-                if (!typeof(T).IsAssignableFrom(kv.Key))
+                if (!nodeMap.TryGetValue(keyType, out var list) || list == null)
                     continue;
 
-                var nodes = kv.Value;
-                if (nodes == null)
-                    continue;
+                PruneDeadNodes(list);
 
-                for (var i = 0; i < nodes.Count; i++)
+                for (var j = 0; j < list.Count; j++)
                 {
-                    var item = nodes[i];
-
+                    var item = list[j];
                     if (item == null)
                         continue;
 
@@ -280,7 +293,7 @@ namespace AbyssMoth
 
             return buffer.Count;
         }
-  
+
         public bool TryGetNodeInConnector<T>(LocalConnector connector, out T node) where T : MonoBehaviour
         {
             node = null;
@@ -295,7 +308,6 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var item = nodes[i];
-
                 if (item == null)
                     continue;
 
@@ -412,7 +424,6 @@ namespace AbyssMoth
             {
                 var node = nodes[i];
 
-                // === NOTE: Distinguishes a real C# null from a Unity fake-null :D === //
                 if (ReferenceEquals(node, null))
                     continue;
 
@@ -427,7 +438,7 @@ namespace AbyssMoth
                     nodeMap.Remove(type);
             }
         }
-        
+
         private static void PruneDeadNodes(List<MonoBehaviour> list)
         {
             for (var i = list.Count - 1; i >= 0; i--)
@@ -436,7 +447,27 @@ namespace AbyssMoth
                     list.RemoveAt(i);
             }
         }
-        
+
+        private void InvalidateAssignableCache() =>
+            assignableKeysCache.Clear();
+
+        private List<Type> GetAssignableKeys(Type requestedType)
+        {
+            if (assignableKeysCache.TryGetValue(requestedType, out var cached) && cached != null)
+                return cached;
+
+            var keys = new List<Type>(capacity: nodeMap.Count);
+
+            foreach (var kv in nodeMap)
+            {
+                if (requestedType.IsAssignableFrom(kv.Key))
+                    keys.Add(kv.Key);
+            }
+
+            assignableKeysCache[requestedType] = keys;
+            return keys;
+        }
+
         public void PruneDeadReferences()
         {
             if (idMap.Count > 0)
@@ -460,6 +491,7 @@ namespace AbyssMoth
                 foreach (var kv in tagMap)
                 {
                     var list = kv.Value;
+
                     if (list == null)
                     {
                         tagsToRemove.Add(kv.Key);
@@ -487,6 +519,7 @@ namespace AbyssMoth
                 foreach (var kv in nodeMap)
                 {
                     var list = kv.Value;
+
                     if (list == null)
                     {
                         typesToRemove.Add(kv.Key);
@@ -506,12 +539,14 @@ namespace AbyssMoth
                 for (var i = 0; i < typesToRemove.Count; i++)
                     nodeMap.Remove(typesToRemove[i]);
             }
+
+            InvalidateAssignableCache();
         }
 
         public string BuildDump(int maxItemsPerGroup = 40)
         {
             PruneDeadReferences();
-            
+
             var sb = new System.Text.StringBuilder(2048);
 
             sb.AppendLine("SceneEntityIndex");
@@ -524,13 +559,16 @@ namespace AbyssMoth
             if (idMap.Count > 0)
             {
                 sb.AppendLine("IdMap:");
+
                 var ids = new List<int>(idMap.Count);
+
                 foreach (var kv in idMap)
                     ids.Add(kv.Key);
 
                 ids.Sort();
 
                 var limit = Mathf.Min(ids.Count, maxItemsPerGroup);
+
                 for (var i = 0; i < limit; i++)
                 {
                     var id = ids[i];
@@ -547,13 +585,16 @@ namespace AbyssMoth
             if (tagMap.Count > 0)
             {
                 sb.AppendLine("TagMap:");
+
                 var tags = new List<string>(tagMap.Count);
+
                 foreach (var kv in tagMap)
                     tags.Add(kv.Key);
 
                 tags.Sort(StringComparer.Ordinal);
 
                 var limit = Mathf.Min(tags.Count, maxItemsPerGroup);
+
                 for (var i = 0; i < limit; i++)
                 {
                     var tag = tags[i];
@@ -564,6 +605,7 @@ namespace AbyssMoth
                     if (list != null)
                     {
                         var innerLimit = Mathf.Min(list.Count, 12);
+
                         for (var j = 0; j < innerLimit; j++)
                         {
                             var c = list[j];
@@ -589,13 +631,16 @@ namespace AbyssMoth
             if (nodeMap.Count > 0)
             {
                 sb.AppendLine("NodeTypes:");
+
                 var types = new List<Type>(nodeMap.Count);
+
                 foreach (var kv in nodeMap)
                     types.Add(kv.Key);
 
                 types.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
 
                 var limit = Mathf.Min(types.Count, maxItemsPerGroup);
+
                 for (var i = 0; i < limit; i++)
                 {
                     var t = types[i];
@@ -610,24 +655,24 @@ namespace AbyssMoth
             return sb.ToString();
         }
 
-        public override string ToString() => BuildDump();
+        public override string ToString() =>
+            BuildDump();
     }
-    
-    // === Unsafe API === //
+
+    [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
     public sealed partial class SceneEntityIndex
     {
         public T FindFirstNode<T>(bool includeDerived = true) where T : class
         {
             var requestedType = typeof(T);
 
-            if (nodeMap.TryGetValue(requestedType, out var list) && list != null)
+            if (nodeMap.TryGetValue(requestedType, out var direct) && direct != null)
             {
-                PruneDeadNodes(list);
+                PruneDeadNodes(direct);
 
-                for (var i = 0; i < list.Count; i++)
+                for (var i = 0; i < direct.Count; i++)
                 {
-                    var item = list[i];
-
+                    var item = direct[i];
                     if (item == null)
                         continue;
 
@@ -639,22 +684,23 @@ namespace AbyssMoth
             if (!includeDerived)
                 return null;
 
-            foreach (var kv in nodeMap)
+            var keys = GetAssignableKeys(requestedType);
+
+            for (var i = 0; i < keys.Count; i++)
             {
-                if (!requestedType.IsAssignableFrom(kv.Key))
+                var keyType = keys[i];
+
+                if (keyType == requestedType)
                     continue;
 
-                var nodes = kv.Value;
-
-                if (nodes == null)
+                if (!nodeMap.TryGetValue(keyType, out var list) || list == null)
                     continue;
 
-                PruneDeadNodes(nodes);
+                PruneDeadNodes(list);
 
-                for (var i = 0; i < nodes.Count; i++)
+                for (var j = 0; j < list.Count; j++)
                 {
-                    var item = nodes[i];
-
+                    var item = list[j];
                     if (item == null)
                         continue;
 
@@ -673,7 +719,7 @@ namespace AbyssMoth
 
             throw new InvalidOperationException($"SceneEntityIndex: Node {typeof(T).Name} not found.\n{BuildDump()}");
         }
-        
+
         public LocalConnector GetFirstByTagOrThrow(string tag)
         {
             if (TryGetFirstByTag(tag, out var connector))

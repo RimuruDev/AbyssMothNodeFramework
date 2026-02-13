@@ -1,3 +1,7 @@
+#if UNITY_EDITOR
+#define UNITY_EDITOR_MODE
+#endif
+
 using UnityEngine;
 using UnityEngine.Scripting;
 
@@ -7,22 +11,37 @@ namespace AbyssMoth
     [SelectionBase]
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-1100)]
-    [RequireComponent(typeof(LocalConnector))]
-    public sealed class ProjectRootConnector : MonoBehaviour
+    public sealed class ProjectRootConnector : LocalConnector
     {
-        private LocalConnector connector;
-
         public ServiceRegistry ProjectContext { get; private set; }
 
-        public void Awake()
+#if UNITY_EDITOR_MODE
+        public override void OnValidate()
         {
+            Order = -1;
+            base.OnValidate();
+        }
+#endif
+
+        private void Awake()
+        {
+            ProjectRootRegistry.Set(root: this);
+            
             ProjectContext = new ServiceRegistry();
 
-            connector = GetComponent<LocalConnector>();
-            connector.Execute(ProjectContext);
+            Debug.Log($"<color=magenta> <color=red>></color> ProjectRootConnector.Execute()</color>");
+            Execute(ProjectContext, sender: this);
 
-            transform.SetParent(p: null);
+            transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
+        }
+
+        public override void OnDestroy()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            ProjectRootRegistry.Clear(root: this);
         }
     }
 }
