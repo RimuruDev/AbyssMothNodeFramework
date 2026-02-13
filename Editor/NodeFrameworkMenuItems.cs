@@ -17,11 +17,10 @@ namespace AbyssMoth
         private const string menuRootEdit = "Edit/AbyssMoth Node Framework/";
         private const string menuRootGameObject = "GameObject/AbyssMoth Node Framework/";
         private const string menuRootAssetsCreate = "Assets/Create/AbyssMoth Node Framework/";
-      
+
         private const string defaultFrameworkRoot = "Assets/AbyssMothNodeFramework";
         private const string defaultResourcesRoot = defaultFrameworkRoot + "/Resources";
         private const string defaultResourcesPath = defaultResourcesRoot + "/AbyssMothNodeFramework";
-        
         private const string defaultProjectRootPrefabName = "ProjectRootConnector";
         private const string defaultProjectRootPrefabPath = defaultResourcesPath + "/" + defaultProjectRootPrefabName + ".prefab";
         private const string defaultDebugConfigAssetName = "ConnectorDebugConfig";
@@ -38,149 +37,11 @@ namespace AbyssMoth
             AssetDatabase.Refresh();
         }
 
-        private static void EnsureProjectRootPrefab(bool focusAsset)
-        {
-            var already = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
-
-            if (already != null)
-            {
-                if (focusAsset)
-                {
-                    Selection.activeObject = already;
-                    EditorGUIUtility.PingObject(already);
-                }
-
-                return;
-            }
-
-            var existingPaths = FindProjectRootPrefabPaths();
-
-            var assetsPaths = new List<string>(capacity: 2);
-            var packagePaths = new List<string>(capacity: 2);
-
-            for (var i = 0; i < existingPaths.Count; i++)
-            {
-                var path = existingPaths[i];
-
-                if (path.StartsWith("Assets/", StringComparison.Ordinal))
-                    assetsPaths.Add(path);
-                else if (path.StartsWith("Packages/", StringComparison.Ordinal))
-                    packagePaths.Add(path);
-            }
-
-            if (assetsPaths.Count > 1)
-            {
-                Debug.LogError($"Multiple ProjectRootConnector prefabs found in Assets. Count: {assetsPaths.Count}");
-                return;
-            }
-
-            if (assetsPaths.Count == 1)
-            {
-                DeployAsset(assetsPaths[0], defaultProjectRootPrefabPath);
-            }
-            else if (packagePaths.Count >= 1)
-            {
-                DeployAsset(packagePaths[0], defaultProjectRootPrefabPath);
-            }
-            else
-            {
-                CreateProjectRootPrefabAtPath(defaultProjectRootPrefabPath);
-            }
-
-            var created = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
-
-            if (focusAsset && created != null)
-            {
-                Selection.activeObject = created;
-                EditorGUIUtility.PingObject(created);
-            }
-        }
-
-        private static void EnsureDebugConfig()
-        {
-            var already = AssetDatabase.LoadAssetAtPath<ConnectorDebugConfig>(defaultDebugConfigAssetPath);
-
-            if (already != null)
-                return;
-
-            var found = FindAssetsPathsByType<ConnectorDebugConfig>();
-
-            for (var i = 0; i < found.Count; i++)
-            {
-                var path = found[i];
-
-                if (path.StartsWith("Assets/", StringComparison.Ordinal))
-                {
-                    DeployAsset(path, defaultDebugConfigAssetPath);
-                    return;
-                }
-            }
-
-            for (var i = 0; i < found.Count; i++)
-            {
-                var path = found[i];
-
-                if (path.StartsWith("Packages/", StringComparison.Ordinal))
-                {
-                    DeployAsset(path, defaultDebugConfigAssetPath);
-                    return;
-                }
-            }
-
-            var config = ScriptableObject.CreateInstance<ConnectorDebugConfig>();
-            AssetDatabase.CreateAsset(config, defaultDebugConfigAssetPath);
-        }
-
-        private static List<string> FindAssetsPathsByType<T>() where T : UnityEngine.Object
-        {
-            var result = new List<string>(capacity: 8);
-            var guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
-
-            for (var i = 0; i < guids.Length; i++)
-            {
-                var guid = guids[i];
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-
-                if (!string.IsNullOrEmpty(path))
-                    result.Add(path);
-            }
-
-            return result;
-        }
-
-        private static void DeployAsset(string from, string to)
-        {
-            if (string.Equals(from, to, StringComparison.Ordinal))
-                return;
-
-            if (from.StartsWith("Packages/", StringComparison.Ordinal) ||
-                from.StartsWith("Library/PackageCache/", StringComparison.Ordinal))
-            {
-                var ok = AssetDatabase.CopyAsset(from, to);
-
-                if (!ok)
-                {
-                    Debug.LogError($"CopyAsset failed\nFrom: {from}\nTo: {to}");
-                    return;
-                }
-
-                if (from.StartsWith("Packages/", StringComparison.Ordinal))
-                    TryDeleteAsset(from);
-
-                return;
-            }
-
-            var error = AssetDatabase.MoveAsset(from, to);
-
-            if (!string.IsNullOrEmpty(error))
-                Debug.LogError($"MoveAsset failed: {error}\nFrom: {from}\nTo: {to}");
-        }
-
         [MenuItem(menuRootEdit + "Validate Current Scenes", priority = 50)]
         public static void ValidateCurrentScenes()
         {
             EnsureProjectArtifacts(focusAsset: false);
-            
+
             RunOnCurrentScenes(saveAfter: true, () =>
             {
                 var ok = true;
@@ -212,7 +73,7 @@ namespace AbyssMoth
         public static void ValidateAllBuildScenes()
         {
             EnsureProjectArtifacts(focusAsset: false);
-            
+
             RunPreserveSceneSetup(() =>
             {
                 var scenes = EditorBuildSettings.scenes;
@@ -255,7 +116,7 @@ namespace AbyssMoth
         public static void ValidateFullCurrentScenes()
         {
             EnsureProjectArtifacts(focusAsset: false);
-            
+
             RunOnCurrentScenes(saveAfter: true, () =>
             {
                 var ok = true;
@@ -284,7 +145,7 @@ namespace AbyssMoth
         public static void ValidateFullAllBuildScenes()
         {
             EnsureProjectArtifacts(focusAsset: false);
-            
+
             RunPreserveSceneSetup(() =>
             {
                 var scenes = EditorBuildSettings.scenes;
@@ -323,7 +184,7 @@ namespace AbyssMoth
         public static void ValidatePrefabs()
         {
             EnsureProjectArtifacts(focusAsset: false);
-            
+
             var guids = AssetDatabase.FindAssets("t:Prefab");
 
             try
@@ -356,7 +217,7 @@ namespace AbyssMoth
         public static void ValidateThenRun()
         {
             var ok = true;
-            
+
             EnsureProjectArtifacts(focusAsset: false);
 
             RunOnCurrentScenes(saveAfter: true, () =>
@@ -388,7 +249,7 @@ namespace AbyssMoth
         public static void CreateSceneConnector()
         {
             EnsureProjectArtifacts(focusAsset: false);
-            
+
             var scene = SceneManager.GetActiveScene();
 
             if (!scene.isLoaded)
@@ -409,7 +270,7 @@ namespace AbyssMoth
 
             var go = new GameObject("SceneConnector");
             var connector = go.AddComponent<SceneConnector>();
-            
+
             TryAssignDebugConfig(connector, scene);
 
             SceneManager.MoveGameObjectToScene(go, scene);
@@ -908,7 +769,7 @@ namespace AbyssMoth
             var full = Path.GetFullPath(Path.Combine(projectRoot, assetPath));
             return full;
         }
-        
+
         private static void EnsureProjectArtifacts(bool focusAsset)
         {
             EnsureFolder(defaultFrameworkRoot);
@@ -982,6 +843,144 @@ namespace AbyssMoth
                 Debug.LogWarning($"Cannot delete asset (package may be immutable): {assetPath}");
         }
 
+        private static void EnsureProjectRootPrefab(bool focusAsset)
+        {
+            var already = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
+
+            if (already != null)
+            {
+                if (focusAsset)
+                {
+                    Selection.activeObject = already;
+                    EditorGUIUtility.PingObject(already);
+                }
+
+                return;
+            }
+
+            var existingPaths = FindProjectRootPrefabPaths();
+
+            var assetsPaths = new List<string>(capacity: 2);
+            var packagePaths = new List<string>(capacity: 2);
+
+            for (var i = 0; i < existingPaths.Count; i++)
+            {
+                var path = existingPaths[i];
+
+                if (path.StartsWith("Assets/", StringComparison.Ordinal))
+                    assetsPaths.Add(path);
+                else if (path.StartsWith("Packages/", StringComparison.Ordinal))
+                    packagePaths.Add(path);
+            }
+
+            if (assetsPaths.Count > 1)
+            {
+                Debug.LogError($"Multiple ProjectRootConnector prefabs found in Assets. Count: {assetsPaths.Count}");
+                return;
+            }
+
+            if (assetsPaths.Count == 1)
+            {
+                DeployAsset(assetsPaths[0], defaultProjectRootPrefabPath);
+            }
+            else if (packagePaths.Count >= 1)
+            {
+                DeployAsset(packagePaths[0], defaultProjectRootPrefabPath);
+            }
+            else
+            {
+                CreateProjectRootPrefabAtPath(defaultProjectRootPrefabPath);
+            }
+
+            var created = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
+
+            if (focusAsset && created != null)
+            {
+                Selection.activeObject = created;
+                EditorGUIUtility.PingObject(created);
+            }
+        }
+
+        private static void EnsureDebugConfig()
+        {
+            var already = AssetDatabase.LoadAssetAtPath<ConnectorDebugConfig>(defaultDebugConfigAssetPath);
+
+            if (already != null)
+                return;
+
+            var found = FindAssetsPathsByType<ConnectorDebugConfig>();
+
+            for (var i = 0; i < found.Count; i++)
+            {
+                var path = found[i];
+
+                if (path.StartsWith("Assets/", StringComparison.Ordinal))
+                {
+                    DeployAsset(path, defaultDebugConfigAssetPath);
+                    return;
+                }
+            }
+
+            for (var i = 0; i < found.Count; i++)
+            {
+                var path = found[i];
+
+                if (path.StartsWith("Packages/", StringComparison.Ordinal))
+                {
+                    DeployAsset(path, defaultDebugConfigAssetPath);
+                    return;
+                }
+            }
+
+            var config = ScriptableObject.CreateInstance<ConnectorDebugConfig>();
+            AssetDatabase.CreateAsset(config, defaultDebugConfigAssetPath);
+        }
+
+        private static List<string> FindAssetsPathsByType<T>() where T : UnityEngine.Object
+        {
+            var result = new List<string>(capacity: 8);
+            var guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+
+            for (var i = 0; i < guids.Length; i++)
+            {
+                var guid = guids[i];
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+
+                if (!string.IsNullOrEmpty(path))
+                    result.Add(path);
+            }
+
+            return result;
+        }
+
+        private static void DeployAsset(string from, string to)
+        {
+            if (string.Equals(from, to, StringComparison.Ordinal))
+                return;
+
+            if (from.StartsWith("Packages/", StringComparison.Ordinal) ||
+                from.StartsWith("Library/PackageCache/", StringComparison.Ordinal))
+            {
+                var ok = AssetDatabase.CopyAsset(from, to);
+
+                if (!ok)
+                {
+                    Debug.LogError($"CopyAsset failed\nFrom: {from}\nTo: {to}");
+                    return;
+                }
+
+                if (from.StartsWith("Packages/", StringComparison.Ordinal))
+                    TryDeleteAsset(from);
+
+                return;
+            }
+
+            var error = AssetDatabase.MoveAsset(from, to);
+
+            if (!string.IsNullOrEmpty(error))
+                Debug.LogError($"MoveAsset failed: {error}\nFrom: {from}\nTo: {to}");
+        }
+        
         private static void TryAssignDebugConfig(SceneConnector connector, Scene scene)
         {
             if (connector == null)
