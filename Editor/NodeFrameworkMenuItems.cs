@@ -17,69 +17,152 @@ namespace AbyssMoth
         private const string menuRootEdit = "Edit/AbyssMoth Node Framework/";
         private const string menuRootGameObject = "GameObject/AbyssMoth Node Framework/";
         private const string menuRootAssetsCreate = "Assets/Create/AbyssMoth Node Framework/";
-
+      
         private const string defaultFrameworkRoot = "Assets/AbyssMothNodeFramework";
-        private const string defaultResourcesPath = defaultFrameworkRoot + "/Resources";
+        private const string defaultResourcesRoot = defaultFrameworkRoot + "/Resources";
+        private const string defaultResourcesPath = defaultResourcesRoot + "/AbyssMothNodeFramework";
+        
         private const string defaultProjectRootPrefabName = "ProjectRootConnector";
-
         private const string defaultProjectRootPrefabPath = defaultResourcesPath + "/" + defaultProjectRootPrefabName + ".prefab";
+        private const string defaultDebugConfigAssetName = "ConnectorDebugConfig";
+        private const string defaultDebugConfigAssetPath = defaultResourcesPath + "/" + defaultDebugConfigAssetName + ".asset";
 
         [MenuItem(menuRootEdit + "Initialize Project", priority = 1)]
         public static void InitializeProject()
         {
             EnsureFolder(defaultFrameworkRoot);
+            EnsureFolder(defaultResourcesRoot);
             EnsureFolder(defaultResourcesPath);
+
+            EnsureProjectRootPrefab();
+            EnsureDebugConfig();
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        private static void EnsureProjectRootPrefab()
+        {
+            var already = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
+
+            if (already != null)
+            {
+                Selection.activeObject = already;
+                EditorGUIUtility.PingObject(already);
+                return;
+            }
 
             var existingPaths = FindProjectRootPrefabPaths();
 
-            if (existingPaths.Count > 1)
-            {
-                Debug.LogError(
-                    $"Multiple ProjectRootConnector prefabs found. Expected exactly 1. Count: {existingPaths.Count}");
+            var assetsPaths = new List<string>(capacity: 2);
+            var packagePaths = new List<string>(capacity: 2);
 
-                for (var i = 0; i < existingPaths.Count; i++)
+            for (var i = 0; i < existingPaths.Count; i++)
+            {
+                var path = existingPaths[i];
+
+                if (path.StartsWith("Assets/", StringComparison.Ordinal))
+                    assetsPaths.Add(path);
+                else if (path.StartsWith("Packages/", StringComparison.Ordinal))
+                    packagePaths.Add(path);
+            }
+
+            if (assetsPaths.Count > 1)
+            {
+                Debug.LogError($"Multiple ProjectRootConnector prefabs found in Assets. Count: {assetsPaths.Count}");
+                return;
+            }
+
+            if (assetsPaths.Count == 1)
+            {
+                DeployAsset(assetsPaths[0], defaultProjectRootPrefabPath);
+            }
+            else if (packagePaths.Count >= 1)
+            {
+                DeployAsset(packagePaths[0], defaultProjectRootPrefabPath);
+            }
+            else
+            {
+                CreateProjectRootPrefabAtPath(defaultProjectRootPrefabPath);
+            }
+
+            var created = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
+            Selection.activeObject = created;
+            EditorGUIUtility.PingObject(created);
+        }
+
+        private static void EnsureDebugConfig()
+        {
+            var already = AssetDatabase.LoadAssetAtPath<ConnectorDebugConfig>(defaultDebugConfigAssetPath);
+
+            if (already != null)
+                return;
+
+            var found = FindAssetsPathsByType<ConnectorDebugConfig>();
+
+            for (var i = 0; i < found.Count; i++)
+            {
+                var path = found[i];
+
+                if (path.StartsWith("Assets/", StringComparison.Ordinal))
                 {
-                    Debug.LogError($"ProjectRootConnector prefab: {existingPaths[i]}");
+                    DeployAsset(path, defaultDebugConfigAssetPath);
+                    return;
                 }
+            }
+
+            for (var i = 0; i < found.Count; i++)
+            {
+                var path = found[i];
+
+                if (path.StartsWith("Packages/", StringComparison.Ordinal))
+                {
+                    DeployAsset(path, defaultDebugConfigAssetPath);
+                    return;
+                }
+            }
+
+            var config = ScriptableObject.CreateInstance<ConnectorDebugConfig>();
+            AssetDatabase.CreateAsset(config, defaultDebugConfigAssetPath);
+        }
+
+        private static List<string> FindAssetsPathsByType<T>() where T : UnityEngine.Object
+        {
+            var result = new List<string>(capacity: 8);
+            var guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+
+            for (var i = 0; i < guids.Length; i++)
+            {
+                var guid = guids[i];
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+
+                if (!string.IsNullOrEmpty(path))
+                    result.Add(path);
+            }
+
+            return result;
+        }
+
+        private static void DeployAsset(string from, string to)
+        {
+            if (string.Equals(from, to, StringComparison.Ordinal))
+                return;
+
+            if (from.StartsWith("Packages/", StringComparison.Ordinal) ||
+                from.StartsWith("Library/PackageCache/", StringComparison.Ordinal))
+            {
+                var ok = AssetDatabase.CopyAsset(from, to);
+
+                if (!ok)
+                    Debug.LogError($"CopyAsset failed\nFrom: {from}\nTo: {to}");
 
                 return;
             }
 
-            if (existingPaths.Count == 1)
-            {
-                var existingPath = existingPaths[0];
+            var error = AssetDatabase.MoveAsset(from, to);
 
-                if (string.Equals(existingPath, defaultProjectRootPrefabPath, StringComparison.Ordinal))
-                {
-                    var existing = AssetDatabase.LoadAssetAtPath<GameObject>(existingPath);
-                    Selection.activeObject = existing;
-                    EditorGUIUtility.PingObject(existing);
-                    Debug.Log($"ProjectRootConnector already exists: {existingPath}");
-                    return;
-                }
-
-                var moved = TryMoveAsset(existingPath, defaultProjectRootPrefabPath);
-
-                if (moved)
-                {
-                    var movedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(defaultProjectRootPrefabPath);
-                    Selection.activeObject = movedPrefab;
-                    EditorGUIUtility.PingObject(movedPrefab);
-                    Debug.Log($"Moved ProjectRootConnector to: {defaultProjectRootPrefabPath}");
-                    return;
-                }
-
-                var fallback = AssetDatabase.LoadAssetAtPath<GameObject>(existingPath);
-                Selection.activeObject = fallback;
-                EditorGUIUtility.PingObject(fallback);
-                return;
-            }
-
-            var prefab = CreateProjectRootPrefabAtPath(defaultProjectRootPrefabPath);
-            Selection.activeObject = prefab;
-            EditorGUIUtility.PingObject(prefab);
-
-            Debug.Log($"Created ProjectRootConnector at: {defaultProjectRootPrefabPath}");
+            if (!string.IsNullOrEmpty(error))
+                Debug.LogError($"MoveAsset failed: {error}\nFrom: {from}\nTo: {to}");
         }
 
         [MenuItem(menuRootEdit + "Validate Current Scenes", priority = 50)]
@@ -349,7 +432,7 @@ namespace AbyssMoth
                 return;
             }
 
-            if (!folder.EndsWith("/Resources", StringComparison.Ordinal))
+            if (!folder.Contains("/Resources", StringComparison.Ordinal))
             {
                 EditorUtility.DisplayDialog(
                     "Error",
@@ -375,7 +458,8 @@ namespace AbyssMoth
             Debug.Log($"Created ProjectRootConnector at: {prefabPath}");
         }
 
-        private static bool ValidateScene(Scene scene, bool autoFix, bool autoCollectSceneConnectors, bool autoCollectLocalNodes)
+        private static bool ValidateScene(Scene scene, bool autoFix, bool autoCollectSceneConnectors,
+            bool autoCollectLocalNodes)
         {
             var ok = true;
 
@@ -482,54 +566,31 @@ namespace AbyssMoth
 
         private static void EnsureProjectRootExists(bool autoFix, ref bool ok)
         {
-            var allInResources = Resources.LoadAll<ProjectRootConnector>(path: "");
+            var allInFrameworkResources = Resources.LoadAll<ProjectRootConnector>("AbyssMothNodeFramework");
 
-            if (allInResources != null && allInResources.Length > 1)
+            if (allInFrameworkResources != null && allInFrameworkResources.Length > 1)
             {
                 ok = false;
-                Debug.LogError($"Multiple ProjectRootConnector prefabs found in Resources: {allInResources.Length}");
+                Debug.LogError($"Multiple ProjectRootConnector prefabs found in Resources/AbyssMothNodeFramework: {allInFrameworkResources.Length}");
                 return;
             }
 
-            if (allInResources != null && allInResources.Length == 1)
-            {
+            if (allInFrameworkResources != null && allInFrameworkResources.Length == 1)
                 return;
-            }
-
-            var existingPaths = FindProjectRootPrefabPaths();
-
-            if (existingPaths.Count > 1)
-            {
-                ok = false;
-                Debug.LogError(
-                    $"Multiple ProjectRootConnector prefabs found. Expected exactly 1. Count: {existingPaths.Count}");
-                return;
-            }
-
-            if (existingPaths.Count == 1)
-            {
-                if (!autoFix)
-                {
-                    ok = false;
-                    Debug.LogError(
-                        "ProjectRootConnector exists but not in Resources. Run Initialize Project to move it.");
-                    return;
-                }
-
-                InitializeProject();
-                return;
-            }
-
-            ok = false;
 
             if (!autoFix)
             {
-                Debug.LogError("ProjectRootConnector prefab not found in project");
+                ok = false;
+                Debug.LogError("ProjectRootConnector prefab not found in Resources/AbyssMothNodeFramework. Run Initialize Project.");
                 return;
             }
 
             InitializeProject();
-            ok = true;
+
+            allInFrameworkResources = Resources.LoadAll<ProjectRootConnector>("AbyssMothNodeFramework");
+
+            if (allInFrameworkResources == null || allInFrameworkResources.Length != 1)
+                ok = false;
         }
 
         private static void ValidatePrefabAtPath(string path)
