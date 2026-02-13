@@ -20,6 +20,8 @@ namespace AbyssMoth
 
         private readonly HashSet<int> reservedIds = new();
         
+        private readonly Dictionary<Type, List<Type>> assignableKeysCache = new();
+        
         private int nextRuntimeId = 1;
         
         public int RegisteredCount => registered.Count;
@@ -437,6 +439,28 @@ namespace AbyssMoth
             }
         }
         
+        private void InvalidateAssignableCache()
+        {
+            assignableKeysCache.Clear();
+        }
+
+        private List<Type> GetAssignableKeys(Type requestedType)
+        {
+            if (assignableKeysCache.TryGetValue(requestedType, out var cached))
+                return cached;
+
+            var keys = new List<Type>(nodeMap.Count);
+
+            foreach (var kv in nodeMap)
+            {
+                if (requestedType.IsAssignableFrom(kv.Key))
+                    keys.Add(kv.Key);
+            }
+
+            assignableKeysCache.Add(requestedType, keys);
+            return keys;
+        }
+        
         public void PruneDeadReferences()
         {
             if (idMap.Count > 0)
@@ -639,6 +663,7 @@ namespace AbyssMoth
             if (!includeDerived)
                 return null;
 
+            var keys = GetAssignableKeys(requestedType);
             foreach (var kv in nodeMap)
             {
                 if (!requestedType.IsAssignableFrom(kv.Key))

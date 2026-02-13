@@ -46,6 +46,15 @@ namespace AbyssMoth
         
         public IReadOnlyList<MonoBehaviour> Nodes => nodes;
         
+        private List<ITick> tickCache = new();
+        private List<MonoBehaviour> tickMonos = new();
+
+        private List<IFixedTick> fixedTickCache = new();
+        private List<MonoBehaviour> fixedTickMonos = new();
+
+        private List<ILateTick> lateTickCache = new();
+        private List<MonoBehaviour> lateTickMonos = new();
+        
 #if UNITY_EDITOR
         private ConnectorDebugConfig debugConfig;
 
@@ -141,18 +150,21 @@ namespace AbyssMoth
 
         public void Execute(ServiceRegistry registry, Object sender)
         {
-            if (disposed)
-                return;
-
-            if (executed)
-                return;
-
+            if (disposed || executed) return;
             executed = true;
-            
-            Debug.Log($"<color=magenta> <color=red>></color> LocalConnector.Execute -> <color=yellow>{sender?.GetType().Name}</color></color>");
 
+#if UNITY_EDITOR
+            if (debugConfig != null && debugConfig.Enabled && debugConfig.LogLocalConnectorExecute)
+            {
+                var senderName = sender != null ? sender.GetType().Name : "Null";
+                Debug.Log($"<color=magenta> <color=red>></color> LocalConnector.Execute -> <color=yellow>{senderName}</color></color>");
+            }
+#endif
+            
             PruneMissingNodes();
             SortNodes();
+
+            RebuildCaches();
 
 #if UNITY_EDITOR
             debugConfig = null;
@@ -177,82 +189,52 @@ namespace AbyssMoth
 
         public void Tick(float deltaTime)
         {
-            if (disposed)
+            if (!enabledTicks || disposed)
                 return;
             
-            if (!enabledTicks)
-                return;
-
             StepLogger(nameof(Tick));
-            
-            for (var i = 0; i < nodes.Count; i++)
+
+            for (var i = 0; i < tickCache.Count; i++)
             {
-                var node = nodes[i];
-                
-                if (node == null)
-                    continue;
-
-                if (!ShouldRun(node))
-                    continue;
-
-                if (node is ITick tick)
-                    tick.Tick(deltaTime);
+                if (ShouldRun(tickMonos[i]))
+                    tickCache[i].Tick(deltaTime);
             }
         }
 
         public void FixedTick(float fixedDeltaTime)
         {
-            if (disposed)
-                return;
-
-            if (!enabledTicks)
+            if (!enabledTicks || disposed) 
                 return;
             
             StepLogger(nameof(FixedTick));
 
-            for (var i = 0; i < nodes.Count; i++)
+            for (var i = 0; i < fixedTickCache.Count; i++)
             {
-                var node = nodes[i];
-                
-                if (node == null)
-                    continue;
-
-                if (!ShouldRun(node))
-                    continue;
-
-                if (node is IFixedTick tick)
-                    tick.FixedTick(fixedDeltaTime);
+                if (ShouldRun(fixedTickMonos[i]))
+                    fixedTickCache[i].FixedTick(fixedDeltaTime);
             }
         }
 
         public void LateTick(float deltaTime)
         {
-            if (disposed)
-                return;
-            
-            if (!enabledTicks)
+            if (!enabledTicks || disposed) 
                 return;
             
             StepLogger(nameof(LateTick));
 
-            for (var i = 0; i < nodes.Count; i++)
+            for (var i = 0; i < lateTickCache.Count; i++)
             {
-                var node = nodes[i];
-                
-                if (node == null)
-                    continue;
-
-                if (!ShouldRun(node))
-                    continue;
-
-                if (node is ILateTick tick)
-                    tick.LateTick(deltaTime);
+                if (ShouldRun(lateTickMonos[i]))
+                    lateTickCache[i].LateTick(deltaTime);
             }
         }
 
         public void Dispose()
         {
             if (disposed)
+                return;
+
+            if (!Application.isPlaying)
                 return;
 
             disposed = true;
@@ -262,13 +244,19 @@ namespace AbyssMoth
             for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
-                
                 if (node == null)
                     continue;
 
                 if (node is IDispose disposable)
                     disposable.Dispose();
             }
+
+            tickCache.Clear();
+            tickMonos.Clear();
+            fixedTickCache.Clear();
+            fixedTickMonos.Clear();
+            lateTickCache.Clear();
+            lateTickMonos.Clear();
         }
 
         public void OnPauseRequest(Object sender = null)
@@ -313,9 +301,8 @@ namespace AbyssMoth
         public void CollectNodes()
         {
             nodes.Clear();
-
             collected.Clear();
-            GetComponentsInChildren(true, collected);
+            GetComponentsInChildren(includeInactive: true, collected);
 
             for (var i = 0; i < collected.Count; i++)
             {
@@ -329,6 +316,7 @@ namespace AbyssMoth
             }
 
             SortNodes();
+            RebuildCaches();
         }
 
 #if UNITY_EDITOR
@@ -495,7 +483,47 @@ namespace AbyssMoth
                 removed++;
             }
 
+            if (removed > 0) 
+                RebuildCaches();
+            
             return removed;
+        }
+        
+        private void RebuildCaches()
+        {
+            tickCache.Clear();
+            tickMonos.Clear();
+            
+            fixedTickCache.Clear();
+            fixedTickMonos.Clear();
+            
+            lateTickCache.Clear();
+            lateTickMonos.Clear();
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+                if (node == null) 
+                    continue;
+
+                if (node is ITick t)
+                {
+                    tickCache.Add(t);
+                    tickMonos.Add(node);
+                }
+                
+                if (node is IFixedTick ft)
+                {
+                    fixedTickCache.Add(ft);
+                    fixedTickMonos.Add(node);
+                }
+                
+                if (node is ILateTick lt)
+                {
+                    lateTickCache.Add(lt);
+                    lateTickMonos.Add(node);
+                }
+            }
         }
 
         private void InternalSetEnabledTicks(bool value, Object sender = null)
