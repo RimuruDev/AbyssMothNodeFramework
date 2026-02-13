@@ -1,5 +1,10 @@
 #if UNITY_EDITOR
+#define UNITY_EDITOR_MODE
+#endif
+
+#if UNITY_EDITOR_MODE
 using UnityEditor;
+using System.Reflection;
 using UnityEditor.SceneManagement;
 #endif
 
@@ -29,7 +34,7 @@ namespace AbyssMoth
         [BoxGroup("Nodes")]
         [SerializeField, ReorderableList] private List<MonoBehaviour> nodes = new();
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
         [BoxGroup("Debug")]
         [SerializeField] private bool autoCollectOnValidate;
 
@@ -57,7 +62,7 @@ namespace AbyssMoth
         private readonly List<ILateTick> lateTickCache = new();
         private readonly List<MonoBehaviour> lateTickMonos = new();
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
         private ConnectorDebugConfig debugConfig;
 
         [ShowNativeProperty] private int NodesCount => nodes.Count;
@@ -141,7 +146,7 @@ namespace AbyssMoth
             TryUnregisterFromScene(force: false);
         }
 
-        public void OnDestroy()
+        public virtual void OnDestroy()
         {
             if (!Application.isPlaying)
                 return;
@@ -162,7 +167,7 @@ namespace AbyssMoth
 
             executed = true;
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
             debugConfig = null;
             registry.TryGet(out debugConfig);
 
@@ -320,7 +325,7 @@ namespace AbyssMoth
             RebuildCaches();
         }
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
         public virtual void OnValidate()
         {
             if (Application.isPlaying)
@@ -407,7 +412,7 @@ namespace AbyssMoth
                 if (node == null)
                     continue;
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
                 if (debugConfig != null && debugConfig.Enabled && debugConfig.LogPhaseCalls && node is IInit)
                     Debug.Log($"Init: {name} -> {node.GetType().Name}", node);
 #endif
@@ -525,7 +530,7 @@ namespace AbyssMoth
         {
             enabledTicks = value;
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
             if (sender != null)
             {
                 Debug.Log(!enabledTicks
@@ -537,7 +542,7 @@ namespace AbyssMoth
 
         private void StepLogger(string label)
         {
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
             if (debugConfig == null || !debugConfig.Enabled || !debugConfig.LogTicks)
                 return;
 
@@ -550,7 +555,7 @@ namespace AbyssMoth
 #endif
         }
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR_MODE
         private void ValidateUnityCallbacks()
         {
             for (var i = 0; i < nodes.Count; i++)
@@ -561,11 +566,11 @@ namespace AbyssMoth
 
                 var type = node.GetType();
 
-                if (HasUnityCallback(type, "Awake") ||
-                    HasUnityCallback(type, "Start") ||
-                    HasUnityCallback(type, "Update") ||
-                    HasUnityCallback(type, "FixedUpdate") ||
-                    HasUnityCallback(type, "LateUpdate"))
+                if (HasUnityCallback(type, methodName: "Awake") ||
+                    HasUnityCallback(type, methodName: "Start") ||
+                    HasUnityCallback(type, methodName: "Update") ||
+                    HasUnityCallback(type, methodName: "FixedUpdate") ||
+                    HasUnityCallback(type, methodName: "LateUpdate"))
                 {
                     Debug.LogError($"Unity callbacks are not allowed in ConnectorNode: {type.Name}", node);
                 }
@@ -578,10 +583,10 @@ namespace AbyssMoth
 
             while (current != null && current != typeof(MonoBehaviour))
             {
-                var flags = System.Reflection.BindingFlags.Instance |
-                            System.Reflection.BindingFlags.Public |
-                            System.Reflection.BindingFlags.NonPublic |
-                            System.Reflection.BindingFlags.DeclaredOnly;
+                const BindingFlags flags = BindingFlags.Instance |
+                                           BindingFlags.Public |
+                                           BindingFlags.NonPublic |
+                                           BindingFlags.DeclaredOnly;
 
                 var method = current.GetMethod(methodName, flags);
                 if (method != null)
