@@ -1,6 +1,6 @@
 {
   "name": "com.rimurudev.abyssmoth-node-framework",
-  "version": "2.2.8",
+  "version": "2.2.9",
   "displayName": "AbyssMoth Node Framework",
   "description": "A node-based framework for rapid Android game development with a touch of ECS. Provides LocalConnector, SceneConnector, entity indexing, and editor tools for teams with artists and programmers.",
   "unity": "2023.3",
