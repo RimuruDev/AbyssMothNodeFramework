@@ -45,9 +45,6 @@ namespace AbyssMoth
         }
 
 
-        public void Clear() =>
-            map.Clear();
-
         public bool TryGet<T>(out T value) where T : class
         {
             var key = typeof(T);
@@ -72,5 +69,21 @@ namespace AbyssMoth
 
             throw new KeyNotFoundException($"Service not found: {typeof(T).Name}");
         }
+        
+        public bool Contains<T>() where T : class =>
+            map.ContainsKey(typeof(T));
+
+        public void AddOrThrow<T>(T value) where T : class
+        {
+            var key = typeof(T);
+
+            if (map.ContainsKey(key))
+                throw new InvalidOperationException($"Service already registered: {key.Name}");
+
+            map[key] = value;
+        }
+
+        public void Clear() =>
+            map.Clear();
     }
 }

@@ -109,11 +109,11 @@ namespace AbyssMoth
 #endif
 
         public void Awake() => 
-            SceneConnectorRegistry.TryRegister(this);
+            SceneConnectorRegistry.TryRegister(connector: this);
 
         public void OnDestroy()
         {
-            SceneConnectorRegistry.Unregister(this);
+            SceneConnectorRegistry.Unregister(connector: this);
 
             if (!initialized)
                 return;
@@ -121,16 +121,14 @@ namespace AbyssMoth
             for (var i = 0; i < connectors.Count; i++)
             {
                 var connector = connectors[i];
-
-                if (connector != null && connector.isActiveAndEnabled)
+                if (connector != null)
                     connector.Dispose();
             }
 
             for (var i = 0; i < dynamicConnectors.Count; i++)
             {
                 var connector = dynamicConnectors[i];
-
-                if (connector != null && connector.isActiveAndEnabled)
+                if (connector != null)
                     connector.Dispose();
             }
 
@@ -418,7 +416,7 @@ namespace AbyssMoth
                 return;
 
             sceneIndex.Register(connector);
-            connector.Execute(sceneContext);
+            connector.Execute(sceneContext, sender: this);
 
             var index = GetInsertIndex(connector);
             dynamicConnectors.Insert(index, connector);
@@ -487,7 +485,7 @@ namespace AbyssMoth
                     continue;
 
                 if (connector.isActiveAndEnabled)
-                    connector.Execute(sceneContext);
+                    connector.Execute(sceneContext, sender: this);
             }
         }
         
@@ -502,8 +500,8 @@ namespace AbyssMoth
             if (b == null)
                 return -1;
 
-            var oa = a is ILocalConnectorOrder la ? la.Order : 0;
-            var ob = b is ILocalConnectorOrder lb ? lb.Order : 0;
+            var oa = a is IOrder la ? la.Order : 0;
+            var ob = b is IOrder lb ? lb.Order : 0;
 
             if (oa != ob)
                 return oa.CompareTo(ob);

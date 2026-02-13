@@ -4,7 +4,7 @@ using AbyssMoth;
 namespace AbyssMothNodeFramework.Example
 {
     [SuppressMessage("ReSharper", "NotAccessedField.Local")]
-    public class CompositionRootNode : ConnectorNodeBehaviour
+    public class CompositionRootNode : ConnectorNode
     {
         private ServiceRegistry container;
 
