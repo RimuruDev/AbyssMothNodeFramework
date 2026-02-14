@@ -62,6 +62,12 @@ namespace AbyssMoth
 
         private readonly List<ILateTick> lateTickCache = new();
         private readonly List<MonoBehaviour> lateTickMonos = new();
+        
+        private readonly HashSet<Object> pauseOwners = new(ReferenceComparer<Object>.Instance);
+        private bool pausedTicks;
+
+        public bool IsPaused => pausedTicks;
+        public bool EffectiveTicks => enabledTicks && !pausedTicks;
 
 #if UNITY_EDITOR_MODE
         private ConnectorDebugConfig debugConfig;
@@ -198,7 +204,7 @@ namespace AbyssMoth
 
         public void Tick(float deltaTime)
         {
-            if (!enabledTicks || disposed)
+            if (!enabledTicks || pausedTicks || disposed)
                 return;
 
             StepLogger(nameof(Tick));
@@ -212,7 +218,7 @@ namespace AbyssMoth
 
         public void FixedTick(float fixedDeltaTime)
         {
-            if (!enabledTicks || disposed)
+            if (!enabledTicks || pausedTicks || disposed)
                 return;
 
             StepLogger(nameof(FixedTick));
@@ -226,7 +232,7 @@ namespace AbyssMoth
 
         public void LateTick(float deltaTime)
         {
-            if (!enabledTicks || disposed)
+            if (!enabledTicks || pausedTicks || disposed)
                 return;
 
             StepLogger(nameof(LateTick));
@@ -259,6 +265,9 @@ namespace AbyssMoth
                 if (node is IDispose disposable)
                     disposable.Dispose();
             }
+            
+            pauseOwners.Clear();
+            pausedTicks = false;
 
             tickCache.Clear();
             tickMonos.Clear();
@@ -270,10 +279,18 @@ namespace AbyssMoth
 
         public void OnPauseRequest(Object sender = null)
         {
-            if (!enabledTicks)
+            if (disposed)
                 return;
 
-            InternalSetEnabledTicks(false, sender);
+            var owner = sender != null ? sender : this;
+
+            if (!pauseOwners.Add(owner))
+                return;
+
+            if (pauseOwners.Count != 1)
+                return;
+
+            InternalSetPausedTicks(true, sender);
 
             for (var i = 0; i < nodes.Count; i++)
             {
@@ -282,13 +299,21 @@ namespace AbyssMoth
                     continue;
 
                 if (node is IPausable pausable)
-                    pausable.OnPauseRequest(sender);
+                    pausable.OnPauseRequest(owner);
             }
         }
 
         public void OnResumeRequest(Object sender = null)
         {
-            if (enabledTicks)
+            if (disposed)
+                return;
+
+            var owner = sender != null ? sender : this;
+
+            if (!pauseOwners.Remove(owner))
+                return;
+
+            if (pauseOwners.Count > 0)
                 return;
 
             for (var i = 0; i < nodes.Count; i++)
@@ -298,10 +323,10 @@ namespace AbyssMoth
                     continue;
 
                 if (node is IPausable pausable)
-                    pausable.OnResumeRequest(sender);
+                    pausable.OnResumeRequest(owner);
             }
 
-            InternalSetEnabledTicks(true, sender);
+            InternalSetPausedTicks(false, sender);
         }
 
         [Button("Collect Nodes - Собрать все нода. Жмякни если компоненты перестали выполнять Tick();")]
@@ -592,16 +617,16 @@ namespace AbyssMoth
             }
         }
 
-        private void InternalSetEnabledTicks(bool value, Object sender = null)
+        private void InternalSetPausedTicks(bool value, Object sender = null)
         {
-            enabledTicks = value;
+            pausedTicks = value;
 
 #if UNITY_EDITOR_MODE
             if (sender != null)
             {
-                Debug.Log(!enabledTicks
-                    ? $"-> Pause | Sender: {sender.GetType().Name}.cs"
-                    : $"-> Resume | Sender: {sender.GetType().Name}.cs");
+                Debug.Log(!pausedTicks
+                    ? $"-> Resume | Sender: {sender.GetType().Name}.cs"
+                    : $"-> Pause | Sender: {sender.GetType().Name}.cs");
             }
 #endif
         }
