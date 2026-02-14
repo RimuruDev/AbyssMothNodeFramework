@@ -8,6 +8,7 @@ using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.Scripting;
 using System.Collections.Generic;
+using Object = UnityEngine.Object;
 
 namespace AbyssMoth
 {
@@ -55,6 +56,11 @@ namespace AbyssMoth
         
         public bool IsInitialized => initialized;
         public ServiceRegistry SceneContext => sceneContext;
+        
+        private readonly HashSet<Object> pauseOwners = new(ReferenceComparer<Object>.Instance);
+        private readonly List<Object> pauseOwnersBuffer = new(capacity: 8);
+
+        public bool IsPaused => pauseOwners.Count > 0;
 
 #if UNITY_EDITOR
         [ShowNativeProperty] private int DynamicCount => dynamicConnectors.Count;
@@ -339,6 +345,73 @@ namespace AbyssMoth
         [Button("Collect LocalConnectors From Scene")]
         public void CollectConnectors() =>
             CollectConnectorsCore(markDirtyIfChanged: !Application.isPlaying);
+        
+        public void OnPauseRequest(Object sender = null)
+        {
+            if (!initialized)
+                return;
+
+            var owner = sender != null ? sender : this;
+
+            if (!pauseOwners.Add(owner))
+                return;
+
+            for (var i = 0; i < connectors.Count; i++)
+            {
+                var c = connectors[i];
+                if (c != null)
+                    c.OnPauseRequest(owner);
+            }
+
+            for (var i = 0; i < dynamicConnectors.Count; i++)
+            {
+                var c = dynamicConnectors[i];
+                if (c != null)
+                    c.OnPauseRequest(owner);
+            }
+        }
+
+        public void OnResumeRequest(Object sender = null)
+        {
+            if (!initialized)
+                return;
+
+            var owner = sender != null ? sender : this;
+
+            if (!pauseOwners.Remove(owner))
+                return;
+
+            for (var i = 0; i < connectors.Count; i++)
+            {
+                var c = connectors[i];
+                if (c != null)
+                    c.OnResumeRequest(owner);
+            }
+
+            for (var i = 0; i < dynamicConnectors.Count; i++)
+            {
+                var c = dynamicConnectors[i];
+                if (c != null)
+                    c.OnResumeRequest(owner);
+            }
+        }
+        
+        private void ApplyPauseOwners(LocalConnector connector)
+        {
+            if (connector == null)
+                return;
+
+            if (pauseOwners.Count == 0)
+                return;
+
+            pauseOwnersBuffer.Clear();
+
+            foreach (var owner in pauseOwners)
+                pauseOwnersBuffer.Add(owner);
+
+            for (var i = 0; i < pauseOwnersBuffer.Count; i++)
+                connector.OnPauseRequest(pauseOwnersBuffer[i]);
+        }
 
         private bool CollectConnectorsCore(bool markDirtyIfChanged)
         {
@@ -465,6 +538,7 @@ namespace AbyssMoth
 
             sceneIndex.Register(connector);
             connector.Execute(sceneContext, sender: this);
+            ApplyPauseOwners(connector);
 
             var index = GetInsertIndex(connector);
             dynamicConnectors.Insert(index, connector);
