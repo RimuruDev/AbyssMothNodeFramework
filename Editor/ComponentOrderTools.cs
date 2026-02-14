@@ -32,7 +32,8 @@ namespace AbyssMoth
             }
         }
 
-        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_3 + "Fix Component Order In Selection", secondaryPriority = 4500)]
+        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_3 + "Fix Component Order In Selection",
+            secondaryPriority = 4500)]
         public static void FixInSelection()
         {
             var selection = Selection.gameObjects;
@@ -43,7 +44,8 @@ namespace AbyssMoth
                 FixInHierarchy(selection[i]);
         }
 
-        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_3 + " Fix Component Order In Selected Prefabs", secondaryPriority = 4800)]
+        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_3 + " Fix Component Order In Selected Prefabs",
+            secondaryPriority = 4800)]
         public static void FixInSelectedPrefabs()
         {
             var guids = Selection.assetGUIDs;
@@ -107,6 +109,27 @@ namespace AbyssMoth
             }
         }
 
+        private static void EnsureAfter(GameObject go, Component lower, Component upper)
+        {
+            if (go == null || lower == null || upper == null)
+                return;
+
+            for (var i = 0; i < 64; i++)
+            {
+                var indexLower = GetIndex(go, lower);
+                var indexUpper = GetIndex(go, upper);
+
+                if (indexLower < 0 || indexUpper < 0)
+                    return;
+
+                if (indexLower > indexUpper)
+                    return;
+
+                if (!ComponentUtility.MoveComponentDown(lower))
+                    return;
+            }
+        }
+
         private static void MoveToTop(Component component)
         {
             if (component == null)
@@ -143,6 +166,13 @@ namespace AbyssMoth
             EnsureBefore(go, entityKey, localConnector);
             EnsureBefore(go, sceneConnector, entityKey);
             EnsureBefore(go, sceneConnector, localConnector);
+
+            if (localConnector != null)
+            {
+                var nodes = go.GetComponents<ConnectorNode>();
+                for (var i = 0; i < nodes.Length; i++)
+                    EnsureAfter(go, nodes[i], localConnector);
+            }
         }
 
         private static void EnsureBefore(GameObject go, Component upper, Component lower)

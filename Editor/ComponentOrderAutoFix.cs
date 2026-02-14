@@ -29,7 +29,8 @@ namespace AbyssMoth
 
             if (component is not EntityKeyBehaviour &&
                 component is not LocalConnector &&
-                component is not SceneConnector)
+                component is not SceneConnector &&
+                component is not ConnectorNode)
                 return;
 
             Queue(component.gameObject);
