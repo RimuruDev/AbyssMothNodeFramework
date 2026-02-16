@@ -711,6 +711,9 @@ namespace AbyssMoth
 
             return null;
         }
+        
+        public bool TryGetByTag(string tag, out LocalConnector connector) =>
+            TryGetFirstByTag(tag, out connector);
 
         public T GetFirstNodeOrThrow<T>(bool includeDerived = true) where T : class
         {
