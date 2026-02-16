@@ -29,7 +29,9 @@ namespace AbyssMoth
             
             ProjectContext = new ServiceRegistry();
 
+#if UNITY_EDITOR_MODE
             Debug.Log($"<color=magenta> <color=red>></color> ProjectRootConnector.Execute()</color>");
+#endif
             Execute(ProjectContext, sender: this);
 
             transform.SetParent(null);
