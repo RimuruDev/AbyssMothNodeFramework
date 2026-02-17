@@ -759,8 +759,29 @@ namespace AbyssMoth
 
             return (localConnectors, entityKeyBehaviours);
         }
-
-        public int GetAllByTagNonAlloc(
+        
+         /// <summary>
+         /// <example>
+         /// <code>
+         ///   private readonly List<LocalConnector> doorConnectors = new(capacity: 16);
+         ///   private readonly List<EntityKeyBehaviour> doorKeys = new(capacity: 16);
+         ///   
+         ///   public void DebugDoors(SceneEntityIndex database)
+         ///    {
+         ///        var count = database.GetAllByTagNonAlloc("Door", doorConnectors, doorKeys);
+         ///  
+         ///        for (var i = 0; i < count; i++)
+         ///        {
+         ///            var connector = doorConnectors[i];
+         ///            var key = doorKeys[i];
+         ///            Debug.Log($"[Found->  Name: {connector.name} | Id: {key.Id}]");
+         ///        }
+         ///    }
+         /// </code>
+         /// </example>
+         /// </summary>
+        [SuppressMessage("ReSharper", "InvalidXmlDocComment")]
+         public int GetAllByTagNonAlloc(
             string tag,
             List<LocalConnector> connectorsBuffer,
             List<EntityKeyBehaviour> entityKeysBuffer,
@@ -809,7 +830,31 @@ namespace AbyssMoth
             return connectorsBuffer.Count;
         }
 
-        public int GetAllByTagEntityKeysNonAlloc(
+         /// <summary>
+         /// <example>
+         /// <code>
+         /// private readonly List<EntityKeyBehaviour> doorKeys = new(capacity: 16);
+         /// 
+         ///   public void DebugDoors(SceneEntityIndex database)
+         ///   {
+         ///       var count = database.GetAllByTagEntityKeysNonAlloc("Door", doorKeys, out var connectors);
+         /// 
+         ///       for (var i = 0; i < count; i++)
+         ///       {
+         ///           var connector = connectors[i];
+         ///           var key = doorKeys[i];
+         /// 
+         ///           if (connector == null || key == null)
+         ///               continue;
+         /// 
+         ///           Debug.Log($"[Found->  Name: {connector.name} | Id: {key.Id}]");
+         ///       }
+         ///   }
+         /// </code>
+         /// </example>
+         /// </summary>
+        [SuppressMessage("ReSharper", "InvalidXmlDocComment")]
+         public int GetAllByTagEntityKeysNonAlloc(
             string tag,
             List<EntityKeyBehaviour> entityKeysBuffer,
             out IReadOnlyList<LocalConnector> connectors,
