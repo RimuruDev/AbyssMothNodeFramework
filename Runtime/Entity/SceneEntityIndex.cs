@@ -3,13 +3,16 @@ using UnityEngine;
 using UnityEngine.Scripting;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
 namespace AbyssMoth
 {
     [Preserve]
+    [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
     public sealed partial class SceneEntityIndex
     {
         private static readonly IReadOnlyList<LocalConnector> emptyConnectors = Array.Empty<LocalConnector>();
+        private static readonly IReadOnlyList<EntityKeyBehaviour> emptyEntityKeyBehaviours = Array.Empty<EntityKeyBehaviour>();
 
         private readonly Dictionary<int, LocalConnector> idMap = new(capacity: 128);
         private readonly Dictionary<string, List<LocalConnector>> tagMap = new(capacity: 64, comparer: StringComparer.Ordinal);
@@ -737,6 +740,28 @@ namespace AbyssMoth
                 return connector;
 
             throw new InvalidOperationException($"SceneEntityIndex: Id '{id}' not found.\n{BuildDump()}");
+        }
+    }
+    
+    // === Extensions === //
+    public sealed partial class SceneEntityIndex
+    {
+        public (IReadOnlyList<LocalConnector>, IReadOnlyList<EntityKeyBehaviour>) GetAllByTagWithEntityListAllocation(string tag)
+        {
+            if (string.IsNullOrEmpty(tag))
+                return (emptyConnectors, emptyEntityKeyBehaviours);
+
+            List<LocalConnector> localConnectors = new();
+
+            if (tagMap.TryGetValue(tag, out var list) && list != null)
+                localConnectors = list;
+
+            // NOTE: Each entity definitely has an EntityKeyBehaviour.cs
+            var entityKeyBehaviours = localConnectors
+                .Select(local => local.GetComponent<EntityKeyBehaviour>())
+                .ToList();
+
+            return (localConnectors, entityKeyBehaviours);
         }
     }
 }
