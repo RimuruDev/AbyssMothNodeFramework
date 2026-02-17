@@ -742,26 +742,71 @@ namespace AbyssMoth
             throw new InvalidOperationException($"SceneEntityIndex: Id '{id}' not found.\n{BuildDump()}");
         }
     }
-    
+
     // === Extensions === //
     public sealed partial class SceneEntityIndex
     {
         public (IReadOnlyList<LocalConnector>, IReadOnlyList<EntityKeyBehaviour>) GetAllByTagWithEntityListAllocation(string tag)
         {
-            if (string.IsNullOrEmpty(tag))
+            var localConnectors = GetAllByTag(tag);
+            if (localConnectors == null || localConnectors.Count == 0)
                 return (emptyConnectors, emptyEntityKeyBehaviours);
 
-            List<LocalConnector> localConnectors = new();
+            var entityKeyBehaviours = new List<EntityKeyBehaviour>(localConnectors.Count);
 
-            if (tagMap.TryGetValue(tag, out var list) && list != null)
-                localConnectors = list;
-
-            // NOTE: Each entity definitely has an EntityKeyBehaviour.cs
-            var entityKeyBehaviours = localConnectors
-                .Select(local => local.GetComponent<EntityKeyBehaviour>())
-                .ToList();
+            for (var i = 0; i < localConnectors.Count; i++)
+                entityKeyBehaviours.Add(localConnectors[i].GetComponent<EntityKeyBehaviour>());
 
             return (localConnectors, entityKeyBehaviours);
+        }
+
+        public int GetAllByTagNonAlloc(
+            string tag,
+            List<LocalConnector> connectorsBuffer,
+            List<EntityKeyBehaviour> entityKeysBuffer,
+            bool strict = false)
+        {
+            if (connectorsBuffer == null)
+                throw new ArgumentNullException(nameof(connectorsBuffer));
+
+            if (entityKeysBuffer == null)
+                throw new ArgumentNullException(nameof(entityKeysBuffer));
+
+            connectorsBuffer.Clear();
+            entityKeysBuffer.Clear();
+
+            if (string.IsNullOrEmpty(tag))
+                return 0;
+
+            if (!tagMap.TryGetValue(tag, out var list) || list == null || list.Count == 0)
+                return 0;
+
+            if (connectorsBuffer.Capacity < list.Count)
+                connectorsBuffer.Capacity = list.Count;
+
+            if (entityKeysBuffer.Capacity < list.Count)
+                entityKeysBuffer.Capacity = list.Count;
+
+            for (var i = 0; i < list.Count; i++)
+            {
+                var connector = list[i];
+                if (connector == null)
+                    continue;
+
+                if (!connector.TryGetComponent<EntityKeyBehaviour>(out var key) || key == null)
+                {
+                    if (strict)
+                        throw new InvalidOperationException(
+                            $"SceneEntityIndex: EntityKeyBehaviour missing on {connector.name}");
+
+                    continue;
+                }
+
+                connectorsBuffer.Add(connector);
+                entityKeysBuffer.Add(key);
+            }
+
+            return connectorsBuffer.Count;
         }
     }
 }
