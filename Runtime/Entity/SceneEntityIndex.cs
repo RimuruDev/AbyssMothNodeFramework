@@ -808,5 +808,48 @@ namespace AbyssMoth
 
             return connectorsBuffer.Count;
         }
+
+        public int GetAllByTagEntityKeysNonAlloc(
+            string tag,
+            List<EntityKeyBehaviour> entityKeysBuffer,
+            out IReadOnlyList<LocalConnector> connectors,
+            bool strict = false)
+        {
+            if (entityKeysBuffer == null)
+                throw new ArgumentNullException(nameof(entityKeysBuffer));
+
+            entityKeysBuffer.Clear();
+
+            connectors = GetAllByTag(tag);
+            if (connectors == null || connectors.Count == 0)
+                return 0;
+
+            if (entityKeysBuffer.Capacity < connectors.Count)
+                entityKeysBuffer.Capacity = connectors.Count;
+
+            for (var i = 0; i < connectors.Count; i++)
+            {
+                var connector = connectors[i];
+                if (connector == null)
+                {
+                    entityKeysBuffer.Add(null);
+                    continue;
+                }
+
+                if (!connector.TryGetComponent<EntityKeyBehaviour>(out var key) || key == null)
+                {
+                    if (strict)
+                        throw new InvalidOperationException(
+                            $"SceneEntityIndex: EntityKeyBehaviour missing on {connector.name}");
+
+                    entityKeysBuffer.Add(null);
+                    continue;
+                }
+
+                entityKeysBuffer.Add(key);
+            }
+
+            return connectors.Count;
+        }
     }
 }
