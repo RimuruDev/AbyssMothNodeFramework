@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.Scripting;
 using UnityEngine.SceneManagement;
@@ -10,9 +11,14 @@ namespace AbyssMoth
     {
         private ProjectRootConnector projectRoot;
         private AppLifecycleService lifecycle;
+        private FrameworkConfig config;
 
         public void Awake()
         {
+            config = FrameworkConfig.TryLoadDefault();
+            FrameworkLogger.Configure(config);
+            FrameworkLogger.Boot("SceneOrchestrator.Awake()", this);
+
             projectRoot = FindFirstObjectByType<ProjectRootConnector>(FindObjectsInactive.Include);
 
             // === Project Root === //
@@ -37,7 +43,7 @@ namespace AbyssMoth
 
                 if (projectRoot == null)
                 {
-                    Debug.LogError("ProjectRootConnector is null. Scene initialization will not run.");
+                    FrameworkLogger.Error("ProjectRootConnector is null. Scene initialization will not run.", this);
                     return;
                 }
             }
@@ -46,20 +52,32 @@ namespace AbyssMoth
             {
                 if (projectRoot != null)
                 {
+                    if (config != null && !projectRoot.ProjectContext.Contains<FrameworkConfig>())
+                        projectRoot.ProjectContext.Add(config);
+
                     if (!projectRoot.ProjectContext.TryGet(out lifecycle))
                     {
                         lifecycle = new AppLifecycleService();
                         projectRoot.ProjectContext.Add(lifecycle);
+                        FrameworkLogger.Boot("AppLifecycleService registered", this);
                     }
                 }
             }
 
             // === App SceneTransition === //
             {
-                if (!projectRoot.ProjectContext.TryGet(out SceneTransitionService transitions))
+                if (config != null &&
+                    config.RegisterDefaultSceneTransitionService &&
+                    !projectRoot.ProjectContext.TryGet(out SceneTransitionService transitions))
                 {
-                    transitions = new SceneTransitionService(runner: this, Constants.EmptySceneTransitionName);
+                    var transitionSceneName = config.DefaultTransitionSceneName;
+
+                    if (string.IsNullOrWhiteSpace(transitionSceneName))
+                        transitionSceneName = Constants.EmptySceneTransitionName;
+
+                    transitions = new SceneTransitionService(runner: this, transitionSceneName);
                     projectRoot.ProjectContext.Add(transitions);
+                    FrameworkLogger.Boot($"SceneTransitionService registered ({transitionSceneName})", this);
                 }
             }
 
@@ -81,6 +99,8 @@ namespace AbyssMoth
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            FrameworkLogger.Boot($"Scene loaded: {scene.name} ({mode})", this);
+
             if (SceneConnectorRegistry.TryGet(scene, out var sceneConnector) && sceneConnector != null)
             {
                 sceneConnector.Execute(projectRoot.ProjectContext);
@@ -99,7 +119,7 @@ namespace AbyssMoth
                 {
                     if (found != null)
                     {
-                        Debug.LogError($"Two SceneConnector in scene: {scene.name}", context: this);
+                        FrameworkLogger.Error($"Two SceneConnector in scene: {scene.name}", this);
                         return;
                     }
 
@@ -117,7 +137,7 @@ namespace AbyssMoth
             if (string.Equals(scene.name, Constants.EmptySceneTransitionName))
                 return;
 
-            Debug.LogWarning($"SceneConnector not found in scene: {scene.name}");
+            FrameworkLogger.Warning($"SceneConnector not found in scene: {scene.name}", this);
 #endif
         }
     }

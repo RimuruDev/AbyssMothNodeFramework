@@ -13,7 +13,7 @@ namespace AbyssMoth
     [DefaultExecutionOrder(-1100)]
     public sealed class ProjectRootConnector : LocalConnector
     {
-        public ServiceRegistry ProjectContext { get; private set; }
+        public ServiceContainer ProjectContext { get; private set; }
 
 #if UNITY_EDITOR_MODE
         public override void OnValidate()
@@ -27,11 +27,18 @@ namespace AbyssMoth
         {
             ProjectRootRegistry.Set(root: this);
             
-            ProjectContext = new ServiceRegistry();
+            ProjectContext = new ServiceContainer();
 
-#if UNITY_EDITOR_MODE
-            Debug.Log($"<color=magenta> <color=red>></color> ProjectRootConnector.Execute()</color>");
-#endif
+            var config = FrameworkConfig.TryLoadDefault();
+            if (config != null)
+            {
+                FrameworkLogger.Configure(config);
+
+                if (!ProjectContext.Contains<FrameworkConfig>())
+                    ProjectContext.Add(config);
+            }
+
+            FrameworkLogger.Boot("ProjectRootConnector.Execute()", this);
             Execute(ProjectContext, sender: this);
 
             transform.SetParent(null);

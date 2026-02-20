@@ -4,54 +4,60 @@ using System.Diagnostics.CodeAnalysis;
 namespace AbyssMothNodeFramework.Example
 {
     [SuppressMessage("ReSharper", "NotAccessedField.Local")]
-    public class CompositionRootNode : ConnectorNode
+    public sealed class CompositionRootNode : ConnectorNode
     {
-        private ServiceRegistry container;
+        private ServiceContainer registry;
+        private SceneEntityIndex sceneEntityIndex;
 
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            Order = -1;
+            Order = -1000;
 
-            if (transform.parent.GetComponent<LocalConnector>() == null && GetComponent<LocalConnector>() == null)
+            var hasParentLocal = transform.parent != null &&
+                                 transform.parent.GetComponentInParent<LocalConnector>() != null;
+
+            if (!hasParentLocal && GetComponent<LocalConnector>() == null)
                 gameObject.AddComponent<LocalConnector>();
         }
 #endif
 
-        public override void Bind(ServiceRegistry registry)
+        public override void Bind(ServiceContainer registry)
         {
-            container = registry;
-            
-            // Initialize 
-            // Spawn core gameplay stuff 
-            
-            // Register
-            // Resolve 
-            // Dispose
+            this.registry = registry;
+
+            if (!registry.Contains<SceneBootstrapMarker>())
+                registry.Add(new SceneBootstrapMarker(sceneName: gameObject.scene.name));
         }
 
-        public override void BeforeInit()
+        public override void Construct(ServiceContainer registry)
         {
-            // Awake (Initialization - 1/3)
-            // Get/Subscribe
+            sceneEntityIndex = registry.Get<SceneEntityIndex>();
         }
 
         public override void Init()
         {
-            // Start (Initialization - 2/3)
-            // Validate/Spawn/Ets
+            FrameworkLogger.Info("[Example] CompositionRootNode.Init()", this);
         }
 
         public override void AfterInit()
         {
-           // End (Initialization - 3/3)
-           // 100% - Warmed up !!!
+            if (sceneEntityIndex.TryGetFirstByTag("Hero", out var hero))
+                FrameworkLogger.Info($"[Example] Hero found: {hero.name}", this);
         }
 
         protected override void DisposeInternal()
         {
-            // Dispose subscribers:
-            // container.RemoveIfSame(expected: null);
+            if (registry != null)
+                registry.Remove<SceneBootstrapMarker>();
+        }
+
+        private sealed class SceneBootstrapMarker
+        {
+            public readonly string SceneName;
+
+            public SceneBootstrapMarker(string sceneName) =>
+                SceneName = sceneName;
         }
     }
 }

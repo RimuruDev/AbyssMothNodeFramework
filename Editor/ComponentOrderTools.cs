@@ -146,11 +146,9 @@ namespace AbyssMoth
                 return;
 
             var sceneConnector = go.GetComponent<SceneConnector>();
-            var entityKey = go.GetComponent<EntityKeyBehaviour>();
             var localConnector = go.GetComponent<LocalConnector>();
 
             MoveToTop(localConnector);
-            MoveToTop(entityKey);
             MoveToTop(sceneConnector);
         }
 
@@ -160,11 +158,8 @@ namespace AbyssMoth
                 return;
 
             var sceneConnector = go.GetComponent<SceneConnector>();
-            var entityKey = go.GetComponent<EntityKeyBehaviour>();
             var localConnector = go.GetComponent<LocalConnector>();
 
-            EnsureBefore(go, entityKey, localConnector);
-            EnsureBefore(go, sceneConnector, entityKey);
             EnsureBefore(go, sceneConnector, localConnector);
 
             if (localConnector != null)

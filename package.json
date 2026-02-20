@@ -1,8 +1,8 @@
 {
   "name": "com.rimurudev.abyssmoth-node-framework",
-  "version": "2.3.16",
+  "version": "3.0.0",
   "displayName": "AbyssMoth Node Framework",
-  "description": "A node-based framework for rapid Android game development with a touch of ECS. Provides LocalConnector, SceneConnector, entity indexing, and editor tools for teams with artists and programmers.",
+  "description": "A scene-driven node framework for fast Unity Android development with SceneConnector -> LocalConnector -> ConnectorNode lifecycle control, DI container support, ECS-style indexing, and editor tooling for small teams.",
   "unity": "2023.3",
   "unityRelease": "0f1",
   "documentationUrl": "https://github.com/RimuruDev/AbyssMothNodeFramework/wiki",

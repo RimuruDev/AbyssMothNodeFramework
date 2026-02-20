@@ -5,8 +5,19 @@ namespace AbyssMoth
     [Preserve]
     public static class ProjectServices
     {
-        public static ServiceRegistry Context =>
+        public static ServiceContainer Context =>
             ProjectRootRegistry.GetContext();
+
+        public static FrameworkConfig Config
+        {
+            get
+            {
+                if (Context.TryGet(out FrameworkConfig config))
+                    return config;
+
+                return FrameworkConfig.TryLoadDefault();
+            }
+        }
         
         public static T Get<T>() where T : class =>
             Context.Get<T>();

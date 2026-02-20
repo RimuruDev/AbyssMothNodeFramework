@@ -12,7 +12,7 @@ namespace AbyssMoth
         public const string WindowCode_3 = "\ud83d\udee0\ufe0f";
 
         // Priority ===
-        public const int EntityKeyExplorerWindow_Priority = 0;
+        public const int EntityExplorerWindow_Priority = 0;
         public const int LocalConnectorOrderExplorerWindow_Priority = 1;
         public const int ConnectorNodeOrderExplorerWindow_Priority = 2;
     }

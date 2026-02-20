@@ -1,118 +1,3 @@
-// Dump:
-
-// ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== 
-// ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== 
-//
-// Baseline double-loop: 59.666 ms | calls: 10000000 | ~5.97 ns/call | extra: 163732.3
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner:PrintResult (string,double,int,int,object) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:203)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBaselineLoop (single) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:139)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBenchmark () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:84)
-// System.Reflection.MethodBase:Invoke (object,object[])
-// NaughtyAttributes.Editor.NaughtyEditorGUI:Button (UnityEngine.Object,System.Reflection.MethodInfo) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/Utility/NaughtyEditorGUI.cs:167)
-// NaughtyAttributes.Editor.NaughtyInspector:DrawButtons (bool) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:188)
-// NaughtyAttributes.Editor.NaughtyInspector:OnInspectorGUI () (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:52)
-// UnityEngine.GUIUtility:ProcessEvent (int,intptr,bool&) (at /Users/bokken/build/output/unity/unity/Modules/IMGUI/GUIUtility.cs:224)
-//
-//
-// Interface list Step: 30.292 ms | calls: 10000000 | ~3.03 ns/call
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner:PrintResult (string,double,int,int,object) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:205)
-// AbyssMoth.ConnectorBenchmarkRunner:RunInterfaceLoop (single) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:165)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBenchmark () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:85)
-// System.Reflection.MethodBase:Invoke (object,object[])
-// NaughtyAttributes.Editor.NaughtyEditorGUI:Button (UnityEngine.Object,System.Reflection.MethodInfo) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/Utility/NaughtyEditorGUI.cs:167)
-// NaughtyAttributes.Editor.NaughtyInspector:DrawButtons (bool) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:188)
-// NaughtyAttributes.Editor.NaughtyInspector:OnInspectorGUI () (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:52)
-// UnityEngine.GUIUtility:ProcessEvent (int,intptr,bool&) (at /Users/bokken/build/output/unity/unity/Modules/IMGUI/GUIUtility.cs:224)
-//
-//
-// LocalConnector Tick (cached): 182.26 ms | calls: 10000000 | ~18.23 ns/call
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner:PrintResult (string,double,int,int,object) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:205)
-// AbyssMoth.ConnectorBenchmarkRunner:RunLocalConnectorLoop (single) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:188)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBenchmark () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:86)
-// System.Reflection.MethodBase:Invoke (object,object[])
-// NaughtyAttributes.Editor.NaughtyEditorGUI:Button (UnityEngine.Object,System.Reflection.MethodInfo) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/Utility/NaughtyEditorGUI.cs:167)
-// NaughtyAttributes.Editor.NaughtyInspector:DrawButtons (bool) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:188)
-// NaughtyAttributes.Editor.NaughtyInspector:OnInspectorGUI () (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:52)
-// UnityEngine.GUIUtility:ProcessEvent (int,intptr,bool&) (at /Users/bokken/build/output/unity/unity/Modules/IMGUI/GUIUtility.cs:224)
-//
-// ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== 
-// ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== 
-//
-// Baseline double-loop: 54.414 ms | calls: 10000000 | ~5.44 ns/call | extra: 163732.3
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner:PrintResult (string,double,int,int,object) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:203)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBaselineLoop (single) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:139)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBenchmark () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:84)
-// System.Reflection.MethodBase:Invoke (object,object[])
-// NaughtyAttributes.Editor.NaughtyEditorGUI:Button (UnityEngine.Object,System.Reflection.MethodInfo) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/Utility/NaughtyEditorGUI.cs:167)
-// NaughtyAttributes.Editor.NaughtyInspector:DrawButtons (bool) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:188)
-// NaughtyAttributes.Editor.NaughtyInspector:OnInspectorGUI () (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:52)
-// UnityEngine.GUIUtility:ProcessEvent (int,intptr,bool&) (at /Users/bokken/build/output/unity/unity/Modules/IMGUI/GUIUtility.cs:224)
-//
-// Interface list Step: 29.201 ms | calls: 10000000 | ~2.92 ns/call
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner:PrintResult (string,double,int,int,object) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:205)
-// AbyssMoth.ConnectorBenchmarkRunner:RunInterfaceLoop (single) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:165)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBenchmark () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:85)
-// System.Reflection.MethodBase:Invoke (object,object[])
-// NaughtyAttributes.Editor.NaughtyEditorGUI:Button (UnityEngine.Object,System.Reflection.MethodInfo) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/Utility/NaughtyEditorGUI.cs:167)
-// NaughtyAttributes.Editor.NaughtyInspector:DrawButtons (bool) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:188)
-// NaughtyAttributes.Editor.NaughtyInspector:OnInspectorGUI () (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:52)
-// UnityEngine.GUIUtility:ProcessEvent (int,intptr,bool&) (at /Users/bokken/build/output/unity/unity/Modules/IMGUI/GUIUtility.cs:224)
-//
-// LocalConnector Tick (cached): 177.095 ms | calls: 10000000 | ~17.71 ns/call
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner:PrintResult (string,double,int,int,object) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:205)
-// AbyssMoth.ConnectorBenchmarkRunner:RunLocalConnectorLoop (single) (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:188)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBenchmark () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:86)
-// System.Reflection.MethodBase:Invoke (object,object[])
-// NaughtyAttributes.Editor.NaughtyEditorGUI:Button (UnityEngine.Object,System.Reflection.MethodInfo) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/Utility/NaughtyEditorGUI.cs:167)
-// NaughtyAttributes.Editor.NaughtyInspector:DrawButtons (bool) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:188)
-// NaughtyAttributes.Editor.NaughtyInspector:OnInspectorGUI () (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:52)
-// UnityEngine.GUIUtility:ProcessEvent (int,intptr,bool&) (at /Users/bokken/build/output/unity/unity/Modules/IMGUI/GUIUtility.cs:224)
-//
-// Unity Update probe started. Keep scene quiet for better signal.
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner/<UnityUpdateProbeCoroutine>d__19:MoveNext () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:210)
-// UnityEngine.MonoBehaviour:StartCoroutine (System.Collections.IEnumerator)
-// AbyssMoth.ConnectorBenchmarkRunner:RunBenchmark () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:89)
-// System.Reflection.MethodBase:Invoke (object,object[])
-// NaughtyAttributes.Editor.NaughtyEditorGUI:Button (UnityEngine.Object,System.Reflection.MethodInfo) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/Utility/NaughtyEditorGUI.cs:167)
-// NaughtyAttributes.Editor.NaughtyInspector:DrawButtons (bool) (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:188)
-// NaughtyAttributes.Editor.NaughtyInspector:OnInspectorGUI () (at Assets/AbyssMothFramework/Plugins/NAP/NaughtyAttributes/Scripts/Editor/NaughtyInspector.cs:52)
-// UnityEngine.GUIUtility:ProcessEvent (int,intptr,bool&) (at /Users/bokken/build/output/unity/unity/Modules/IMGUI/GUIUtility.cs:224)
-//
-// Unity BehaviourUpdate avg: 0.179 ms/frame (frames: 300)
-// UnityEngine.Debug:Log (object)
-// AbyssMoth.ConnectorBenchmarkRunner/<UnityUpdateProbeCoroutine>d__19:MoveNext () (at Assets/AbyssMothNodeFramework/Benchmark/ConnectorBenchmarkRunner.cs:249)
-// UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
-//
-// ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== 
-// ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== 
-//
-
-// Brain activation :D
-//
-// Разбор чисел:
-//  Сделал nodesCount=1000, tickLoops=10000 → 10 000 000 вызовов.
-//  Interface list Step: ~29–30 ms на 10 млн → ~3 ns/call
-//  LocalConnector cached: ~177–182 ms на 10 млн → ~18 ns/call
-//
-// Разница ~ 15 ns на вызов (18-3).
-//
-// Теперь переведём в реальность игры:
-//  Если у нас 1000 тикающих нод в кадр
-//  15 ns * 1000 = 15000 ns = 0.015 ms разницы на кадр.
-//  Это вообще ни о чём. Особенно учитывая размер моих игр:3
-//
-// Даже если 5000 нод:
-//  15 ns * 5000 = 0.075 ms на кадр.
-//  То есть по CPU-оверходу диспатча моя система выглядит нормально.
-
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -124,6 +9,9 @@ using UnityEngine.Scripting;
 using Debug = UnityEngine.Debug;
 
 // ReSharper disable NotAccessedField.Local
+// Benchmark usage notes:
+// - README: Benchmark/README.md
+// - Historical runs: Benchmark/BenchmarkResults.md
 
 namespace AbyssMoth
 {
@@ -177,7 +65,7 @@ namespace AbyssMoth
 
         private readonly List<IBenchmarkStep> interfaceAgents = new();
         private LocalConnector connector;
-        private ServiceRegistry registry;
+        private ServiceContainer registry;
         private GameObject root;
 
         [Button("Run Benchmark")]
@@ -214,7 +102,7 @@ namespace AbyssMoth
 
         private void SetupLocalConnector()
         {
-            registry = new ServiceRegistry();
+            registry = new ServiceContainer();
 
             root = new GameObject($"BenchmarkRoot {nodesCount}");
             root.transform.SetParent(transform, worldPositionStays: false);

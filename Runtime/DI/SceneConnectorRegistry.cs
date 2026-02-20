@@ -27,7 +27,7 @@ namespace AbyssMoth
 
             if (map.TryGetValue(scene.handle, out var existing) && existing != null && existing != connector)
             {
-                Debug.LogError($"Two SceneConnector in scene: {scene.name}", connector);
+                FrameworkLogger.Error($"Two SceneConnector in scene: {scene.name}", connector);
                 connector.enabled = false;
                 return;
             }

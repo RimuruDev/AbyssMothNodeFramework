@@ -8,6 +8,7 @@ using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.Scripting;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 namespace AbyssMoth
@@ -25,21 +26,8 @@ namespace AbyssMoth
 
         [BoxGroup("Dynamic")]
         [SerializeField] private bool autoRegisterActiveUnbakedConnectors = true;
-
-        [BoxGroup("Debug")]
-        [SerializeField] private bool logSteps;
-#if UNITY_EDITOR
-        [BoxGroup("Debug")]
-        [SerializeField] private ConnectorDebugConfig debugConfig;
-        [BoxGroup("Debug")]
-        [SerializeField] private bool autoCollectOnValidate = true;
-        [BoxGroup("Debug")]
-        [SerializeField, ReadOnly, TextArea(6, 30)] private string sceneIndexDump;
-        [BoxGroup("Debug")]
-        [SerializeField] private bool autoPruneMissingOnValidate = true;
-#endif
         private SceneEntityIndex sceneIndex;
-        private ServiceRegistry sceneContext;
+        private ServiceContainer sceneContext;
 
         private readonly List<LocalConnector> dynamicConnectors = new(capacity: 64);
         private readonly HashSet<LocalConnector> dynamicSet = new(ReferenceComparer<LocalConnector>.Instance);
@@ -48,14 +36,17 @@ namespace AbyssMoth
         private readonly List<LocalConnector> pendingRemove = new(capacity: 32);
 
         private readonly List<LocalConnector> scanBuffer = new(capacity: 128);
+        private readonly List<LocalConnector> collectBuffer = new(capacity: 128);
 
-        [ShowNonSerializedField] private bool executed;
-        [ShowNonSerializedField] private bool initialized;
-        [ShowNonSerializedField] private bool iterating;
-        [ShowNonSerializedField] private int sceneHandle;
+        private bool executed;
+        private bool initialized;
+        private bool iterating;
+        private int sceneHandle;
         
         public bool IsInitialized => initialized;
-        public ServiceRegistry SceneContext => sceneContext;
+        public ServiceContainer SceneContext => sceneContext;
+        internal bool CanRegisterRuntimeConnectors =>
+            sceneContext != null && sceneIndex != null;
         
         private readonly HashSet<Object> pauseOwners = new(ReferenceComparer<Object>.Instance);
         private readonly List<Object> pauseOwnersBuffer = new(capacity: 8);
@@ -63,65 +54,29 @@ namespace AbyssMoth
         public bool IsPaused => pauseOwners.Count > 0;
 
 #if UNITY_EDITOR
-        [ShowNativeProperty] private int DynamicCount => dynamicConnectors.Count;
-        [ShowNativeProperty] private int PendingAddCount => pendingAdd.Count;
-        [ShowNativeProperty] private int PendingRemoveCount => pendingRemove.Count;
-        [ShowNativeProperty] private bool Iterating => iterating;
-
         private void OnValidate()
         {
             if (Application.isPlaying)
                 return;
 
-            if (autoCollectOnValidate)
-            {
-                CollectConnectorsCore(markDirtyIfChanged: true);
+            var scene = gameObject.scene;
+            if (!scene.IsValid() || !scene.isLoaded)
                 return;
-            }
 
-            if (autoPruneMissingOnValidate)
-            {
-                var removed = PruneMissingConnectors();
-
-                if (removed > 0)
-                {
-                    EditorUtility.SetDirty(this);
-
-                    if (gameObject.scene.IsValid())
-                        EditorSceneManager.MarkSceneDirty(gameObject.scene);
-                }
-            }
+            CollectConnectorsCore(markDirtyIfChanged: true);
         }
-        
-        [Button("Prune Missing Connectors")]
-        private void PruneMissingConnectorsButton()
-        {
-            if (Application.isPlaying)
-                return;
 
-            var removed = PruneMissingConnectors();
-            if (removed <= 0)
-                return;
-
-            Undo.RecordObject(this, "Prune Missing Connectors");
-            EditorUtility.SetDirty(this);
-            EditorSceneManager.MarkAllScenesDirty();
-        }
-        
-        [Button("Dump SceneEntityIndex")]
-        private void DumpSceneIndex()
+        [Button("Log Scene Index Dump")]
+        private void LogSceneIndexDump()
         {
             if (sceneIndex == null)
             {
-                Debug.Log("SceneEntityIndex is null", this);
+                FrameworkLogger.Warning("SceneEntityIndex is null", this);
                 return;
             }
 
             var dump = sceneIndex.BuildDump();
-
-            sceneIndexDump = dump;
-            
-            Debug.Log(dump, this);
+            FrameworkLogger.Info(dump, this);
         }
 #endif
 
@@ -132,7 +87,7 @@ namespace AbyssMoth
         {
             SceneConnectorRegistry.Unregister(connector: this);
 
-            if (!initialized)
+            if (!CanRegisterRuntimeConnectors)
                 return;
 
             for (var i = 0; i < connectors.Count; i++)
@@ -155,7 +110,7 @@ namespace AbyssMoth
             sceneIndex?.Clear();
         }
 
-        public void Execute(ServiceRegistry projectContext)
+        public void Execute(ServiceContainer projectContext)
         {
             if (executed)
                 return;
@@ -163,20 +118,21 @@ namespace AbyssMoth
             executed = true;
 
             sceneHandle = gameObject.scene.handle;
-            sceneContext = new ServiceRegistry(parentContainer: projectContext);
+            sceneContext = new ServiceContainer(parentContainer: projectContext);
+            sceneContext.Add(this);
             
             sceneIndex = new SceneEntityIndex();
             sceneContext.Add(sceneIndex);
-            
-#if UNITY_EDITOR
-            var config = debugConfig;
 
-            if (config == null)
-                config = ConnectorDebugConfig.TryLoadDefault();
-
+            var config = FrameworkConfig.TryLoadDefault();
             if (config != null)
-                sceneContext.Add(config);
-#endif
+            {
+                FrameworkLogger.Configure(config);
+
+                if (!sceneContext.TryGet(out FrameworkConfig _))
+                    sceneContext.Add(config);
+            }
+
             PruneMissingConnectors();
             connectors.Sort(CompareConnectors);
 
@@ -193,8 +149,7 @@ namespace AbyssMoth
                 connector.MarkStatic(sceneHandle);
             }
 
-            if (logSteps)
-                Debug.Log("SceneConnector Execute");
+            FrameworkLogger.Boot($"SceneConnector.Execute({name})", this);
 
             sceneIndex.PrimeReservedIds(connectors, sceneHandle);
             
@@ -210,7 +165,7 @@ namespace AbyssMoth
 
         public void RegisterAndExecute(LocalConnector connector)
         {
-            if (!initialized || connector == null)
+            if (!CanRegisterRuntimeConnectors || connector == null)
                 return;
 
             if (connector.gameObject.scene.handle != sceneHandle)
@@ -230,9 +185,67 @@ namespace AbyssMoth
             RegisterInternal(connector);
         }
 
+        public void RegisterSpawned(LocalConnector connector) =>
+            RegisterAndExecute(connector);
+
+        public void RegisterSpawnedHierarchy(GameObject root)
+        {
+            if (!CanRegisterRuntimeConnectors || root == null)
+                return;
+
+            scanBuffer.Clear();
+            root.GetComponentsInChildren(includeInactive: true, results: scanBuffer);
+            scanBuffer.Sort(CompareConnectors);
+
+            for (var i = 0; i < scanBuffer.Count; i++)
+            {
+                var connector = scanBuffer[i];
+                if (connector == null)
+                    continue;
+
+                if (connector.IsStaticFor(sceneHandle))
+                    continue;
+
+                RegisterAndExecute(connector);
+            }
+
+            scanBuffer.Clear();
+        }
+
+        public T InstantiateAndRegister<T>(T prefab, Transform parent = null, bool worldPositionStays = false)
+            where T : LocalConnector
+        {
+            if (prefab == null)
+                return null;
+
+            var instance = parent == null
+                ? Instantiate(prefab)
+                : Instantiate(prefab, parent, worldPositionStays);
+
+            RegisterSpawnedHierarchy(instance.gameObject);
+            return instance;
+        }
+
+        public T InstantiateAndRegister<T>(
+            T prefab,
+            Vector3 position,
+            Quaternion rotation,
+            Transform parent = null) where T : LocalConnector
+        {
+            if (prefab == null)
+                return null;
+
+            var instance = parent == null
+                ? Instantiate(prefab, position, rotation)
+                : Instantiate(prefab, position, rotation, parent);
+
+            RegisterSpawnedHierarchy(instance.gameObject);
+            return instance;
+        }
+
         public void Unregister(LocalConnector connector)
         {
-            if (!initialized || connector == null)
+            if (!CanRegisterRuntimeConnectors || connector == null)
                 return;
 
             if (iterating)
@@ -416,25 +429,7 @@ namespace AbyssMoth
         private bool CollectConnectorsCore(bool markDirtyIfChanged)
         {
             var next = new List<LocalConnector>(capacity: 64);
-
-            var scene = gameObject.scene;
-            var found = FindObjectsByType<LocalConnector>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-
-            for (var i = 0; i < found.Length; i++)
-            {
-                var item = found[i];
-
-                if (item == null)
-                    continue;
-
-                if (item.gameObject.scene != scene)
-                    continue;
-
-                if (item.GetComponentInParent<ProjectRootConnector>(includeInactive: true) != null)
-                    continue;
-
-                next.Add(item);
-            }
+            CollectSceneConnectors(scene: gameObject.scene, includeInactive: true, output: next);
 
             next.Sort(CompareConnectors);
 
@@ -475,13 +470,12 @@ namespace AbyssMoth
 
         private void RegisterActiveUnbakedConnectors()
         {
-            scanBuffer.Clear();
+            CollectSceneConnectors(scene: gameObject.scene, includeInactive: false, output: scanBuffer);
+            scanBuffer.Sort(CompareConnectors);
 
-            var found = FindObjectsByType<LocalConnector>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-
-            for (var i = 0; i < found.Length; i++)
+            for (var i = 0; i < scanBuffer.Count; i++)
             {
-                var connector = found[i];
+                var connector = scanBuffer[i];
 
                 if (connector == null)
                     continue;
@@ -495,15 +489,49 @@ namespace AbyssMoth
                 if (connector.IsStaticFor(sceneHandle))
                     continue;
 
-                scanBuffer.Add(connector);
+                RegisterInternal(connector);
             }
 
-            scanBuffer.Sort(CompareConnectors);
-
-            for (var i = 0; i < scanBuffer.Count; i++)
-                RegisterInternal(scanBuffer[i]);
-
             scanBuffer.Clear();
+        }
+
+        private void CollectSceneConnectors(Scene scene, bool includeInactive, List<LocalConnector> output)
+        {
+            output.Clear();
+
+            if (!scene.IsValid() || !scene.isLoaded)
+                return;
+
+            var roots = scene.GetRootGameObjects();
+
+            for (var i = 0; i < roots.Length; i++)
+            {
+                var root = roots[i];
+
+                if (root == null)
+                    continue;
+
+                collectBuffer.Clear();
+                root.GetComponentsInChildren(includeInactive, collectBuffer);
+
+                for (var j = 0; j < collectBuffer.Count; j++)
+                {
+                    var connector = collectBuffer[j];
+
+                    if (connector == null)
+                        continue;
+
+                    if (connector.gameObject.scene != scene)
+                        continue;
+
+                    if (connector.GetComponentInParent<ProjectRootConnector>(includeInactive: true) != null)
+                        continue;
+
+                    output.Add(connector);
+                }
+            }
+
+            collectBuffer.Clear();
         }
 
         private void ApplyPending()
@@ -537,12 +565,16 @@ namespace AbyssMoth
                 return;
 
             sceneIndex.Register(connector);
-            connector.Execute(sceneContext, sender: this);
+
+            if (connector.isActiveAndEnabled)
+                connector.Execute(sceneContext, sender: this);
+
             ApplyPauseOwners(connector);
 
             var index = GetInsertIndex(connector);
             dynamicConnectors.Insert(index, connector);
             dynamicSet.Add(connector);
+            connector.SetDynamicRegisteredInternal(true);
         }
 
         private void UnregisterInternal(LocalConnector connector)
@@ -551,6 +583,7 @@ namespace AbyssMoth
                 return;
             
             sceneIndex.Unregister(connector);
+            connector.SetDynamicRegisteredInternal(false);
 
             if (!dynamicSet.Remove(connector))
                 return;

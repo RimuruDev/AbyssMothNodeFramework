@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 using UnityEngine.Scripting;
 
 namespace AbyssMoth
@@ -23,7 +22,7 @@ namespace AbyssMoth
             return instance;
         }
 
-        public static ServiceRegistry GetContext() =>
+        public static ServiceContainer GetContext() =>
             Get().ProjectContext;
 
         public static void Set(ProjectRootConnector root)
@@ -32,7 +31,8 @@ namespace AbyssMoth
                 return;
 
             if (instance != null && instance != root)
-                Debug.LogWarning($"ProjectRootRegistry: Replacing ProjectRootConnector {instance.name} -> {root.name}");
+                FrameworkLogger.Warning(
+                    $"ProjectRootRegistry: Replacing ProjectRootConnector {instance.name} -> {root.name}");
 
             instance = root;
         }

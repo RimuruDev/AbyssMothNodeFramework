@@ -23,10 +23,8 @@ namespace AbyssMoth
         private const string defaultResourcesPath = defaultResourcesRoot + "/AbyssMothNodeFramework";
         private const string defaultProjectRootPrefabName = "ProjectRootConnector";
         private const string defaultProjectRootPrefabPath = defaultResourcesPath + "/" + defaultProjectRootPrefabName + ".prefab";
-        private const string defaultDebugConfigAssetName = "ConnectorDebugConfig";
-        private const string defaultDebugConfigAssetPath = defaultResourcesPath + "/" + defaultDebugConfigAssetName + ".asset";
-       
-        private const string SceneConnectorDebugConfigFieldName = "debugConfig";
+        private const string defaultFrameworkConfigAssetName = "FrameworkConfig";
+        private const string defaultFrameworkConfigAssetPath = defaultResourcesPath + "/" + defaultFrameworkConfigAssetName + ".asset";
 
         [MenuItem(menuRootEdit + "Initialize Project", priority = 1)]
         public static void InitializeProject()
@@ -271,8 +269,6 @@ namespace AbyssMoth
             var go = new GameObject("SceneConnector");
             var connector = go.AddComponent<SceneConnector>();
 
-            TryAssignDebugConfig(connector, scene);
-
             SceneManager.MoveGameObjectToScene(go, scene);
             Selection.activeGameObject = go;
 
@@ -369,12 +365,10 @@ namespace AbyssMoth
 
                 var go = new GameObject("SceneConnector");
                 var connector = go.AddComponent<SceneConnector>();
-                TryAssignDebugConfig(connector, scene);
                 SceneManager.MoveGameObjectToScene(go, scene);
 
                 if (autoCollectSceneConnectors)
                 {
-                    TryAssignDebugConfig(connector, scene);
                     connector.CollectConnectors();
                     EditorUtility.SetDirty(connector);
                 }
@@ -742,7 +736,7 @@ namespace AbyssMoth
             EnsureFolder(defaultResourcesPath);
 
             EnsureProjectRootPrefab(focusAsset);
-            EnsureDebugConfig();
+            EnsureFrameworkConfig();
 
             PurgePackageGeneratedAssets();
         }
@@ -750,7 +744,7 @@ namespace AbyssMoth
         private static void PurgePackageGeneratedAssets()
         {
             PurgePackageProjectRootPrefabs();
-            PurgePackageDebugConfigs();
+            PurgePackageFrameworkConfigs();
         }
 
         private static void PurgePackageProjectRootPrefabs()
@@ -775,9 +769,9 @@ namespace AbyssMoth
             }
         }
 
-        private static void PurgePackageDebugConfigs()
+        private static void PurgePackageFrameworkConfigs()
         {
-            var paths = FindAssetsPathsByType<ConnectorDebugConfig>();
+            var paths = FindAssetsPathsByType<FrameworkConfig>();
 
             for (var i = 0; i < paths.Count; i++)
             {
@@ -786,10 +780,10 @@ namespace AbyssMoth
                 if (!path.StartsWith("Packages/", StringComparison.Ordinal))
                     continue;
 
-                if (string.Equals(path, defaultDebugConfigAssetPath, StringComparison.Ordinal))
+                if (string.Equals(path, defaultFrameworkConfigAssetPath, StringComparison.Ordinal))
                     continue;
 
-                if (!string.Equals(Path.GetFileName(path), defaultDebugConfigAssetName + ".asset",
+                if (!string.Equals(Path.GetFileName(path), defaultFrameworkConfigAssetName + ".asset",
                         StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -866,14 +860,14 @@ namespace AbyssMoth
             }
         }
 
-        private static void EnsureDebugConfig()
+        private static void EnsureFrameworkConfig()
         {
-            var already = AssetDatabase.LoadAssetAtPath<ConnectorDebugConfig>(defaultDebugConfigAssetPath);
+            var already = AssetDatabase.LoadAssetAtPath<FrameworkConfig>(defaultFrameworkConfigAssetPath);
 
             if (already != null)
                 return;
 
-            var found = FindAssetsPathsByType<ConnectorDebugConfig>();
+            var found = FindAssetsPathsByType<FrameworkConfig>();
 
             for (var i = 0; i < found.Count; i++)
             {
@@ -881,7 +875,7 @@ namespace AbyssMoth
 
                 if (path.StartsWith("Assets/", StringComparison.Ordinal))
                 {
-                    DeployAsset(path, defaultDebugConfigAssetPath);
+                    DeployAsset(path, defaultFrameworkConfigAssetPath);
                     return;
                 }
             }
@@ -892,13 +886,13 @@ namespace AbyssMoth
 
                 if (path.StartsWith("Packages/", StringComparison.Ordinal))
                 {
-                    DeployAsset(path, defaultDebugConfigAssetPath);
+                    DeployAsset(path, defaultFrameworkConfigAssetPath);
                     return;
                 }
             }
 
-            var config = ScriptableObject.CreateInstance<ConnectorDebugConfig>();
-            AssetDatabase.CreateAsset(config, defaultDebugConfigAssetPath);
+            var config = ScriptableObject.CreateInstance<FrameworkConfig>();
+            AssetDatabase.CreateAsset(config, defaultFrameworkConfigAssetPath);
         }
 
         private static List<string> FindAssetsPathsByType<T>() where T : UnityEngine.Object
@@ -945,31 +939,6 @@ namespace AbyssMoth
                 Debug.LogError($"MoveAsset failed: {error}\nFrom: {from}\nTo: {to}");
         }
         
-        private static void TryAssignDebugConfig(SceneConnector connector, Scene scene)
-        {
-            if (connector == null)
-                return;
-
-            var config = AssetDatabase.LoadAssetAtPath<ConnectorDebugConfig>(defaultDebugConfigAssetPath);
-            if (config == null)
-                return;
-
-            var so = new SerializedObject(connector);
-            var prop = so.FindProperty(SceneConnectorDebugConfigFieldName);
-            if (prop == null)
-                return;
-
-            if (prop.objectReferenceValue != null)
-                return;
-
-            prop.objectReferenceValue = config;
-            so.ApplyModifiedPropertiesWithoutUndo();
-
-            EditorUtility.SetDirty(connector);
-
-            if (scene.IsValid() && scene.isLoaded)
-                EditorSceneManager.MarkSceneDirty(scene);
-        }
     }
 }
 #endif
