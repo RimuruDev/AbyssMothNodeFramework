@@ -3,31 +3,36 @@ using UnityEngine;
 using UnityEngine.Scripting;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 
 namespace AbyssMoth
 {
     [Preserve]
     [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
-    public sealed partial class SceneEntityIndex
+    public sealed class SceneEntityIndex
     {
         private static readonly IReadOnlyList<LocalConnector> emptyConnectors = Array.Empty<LocalConnector>();
-        private static readonly IReadOnlyList<EntityKeyBehaviour> emptyEntityKeyBehaviours = Array.Empty<EntityKeyBehaviour>();
 
         private readonly Dictionary<int, LocalConnector> idMap = new(capacity: 128);
-        private readonly Dictionary<string, List<LocalConnector>> tagMap = new(capacity: 64, comparer: StringComparer.Ordinal);
+        private readonly Dictionary<string, List<LocalConnector>> tagMap =
+            new(capacity: 64, comparer: StringComparer.Ordinal);
+
+        private readonly Dictionary<Type, List<LocalConnector>> connectorMap = new(capacity: 64);
         private readonly Dictionary<Type, List<MonoBehaviour>> nodeMap = new(capacity: 256);
+        private readonly Dictionary<LocalConnector, string> connectorTagMap =
+            new(capacity: 128, comparer: ReferenceComparer<LocalConnector>.Instance);
 
         private readonly HashSet<LocalConnector> registered = new(ReferenceComparer<LocalConnector>.Instance);
         private readonly HashSet<int> reservedIds = new();
 
-        private readonly Dictionary<Type, List<Type>> assignableKeysCache = new();
+        private readonly Dictionary<Type, List<Type>> assignableNodeKeysCache = new();
+        private readonly Dictionary<Type, List<Type>> assignableConnectorKeysCache = new();
 
         private int nextRuntimeId = 1;
 
         public int RegisteredCount => registered.Count;
         public int IdCount => idMap.Count;
         public int TagCount => tagMap.Count;
+        public int ConnectorTypeCount => connectorMap.Count;
         public int NodeTypeCount => nodeMap.Count;
 
         public void PrimeReservedIds(IReadOnlyList<LocalConnector> connectors, int expectedSceneHandle)
@@ -51,14 +56,12 @@ namespace AbyssMoth
                 if (connector.gameObject.scene.handle != expectedSceneHandle)
                     continue;
 
-                if (!connector.TryGetComponent<EntityKeyBehaviour>(out var key) || key == null)
-                    continue;
-
-                var id = key.Id;
+                var id = connector.EntityId;
                 if (id <= 0)
                     continue;
 
-                reservedIds.Add(id);
+                if (!reservedIds.Add(id))
+                    continue;
 
                 if (id > max)
                     max = id;
@@ -89,7 +92,9 @@ namespace AbyssMoth
         {
             idMap.Clear();
             tagMap.Clear();
+            connectorMap.Clear();
             nodeMap.Clear();
+            connectorTagMap.Clear();
             registered.Clear();
             reservedIds.Clear();
 
@@ -106,7 +111,8 @@ namespace AbyssMoth
             if (!registered.Add(connector))
                 return;
 
-            RegisterEntityKey(connector);
+            RegisterEntity(connector);
+            RegisterConnectorType(connector);
             RegisterNodes(connector);
 
             InvalidateAssignableCache();
@@ -120,10 +126,23 @@ namespace AbyssMoth
             if (!registered.Remove(connector))
                 return;
 
-            UnregisterEntityKey(connector);
+            UnregisterEntity(connector);
+            UnregisterConnectorType(connector);
             UnregisterNodes(connector);
 
             InvalidateAssignableCache();
+        }
+
+        public void Refresh(LocalConnector connector)
+        {
+            if (connector == null)
+                return;
+
+            if (!registered.Contains(connector))
+                return;
+
+            Unregister(connector);
+            Register(connector);
         }
 
         [SuppressMessage("ReSharper", "RedundantAssignment")]
@@ -147,17 +166,15 @@ namespace AbyssMoth
 
         public bool TryGetFirstByTag(string tag, out LocalConnector connector)
         {
-            if (string.IsNullOrEmpty(tag))
-            {
-                connector = null;
+            connector = null;
+
+            if (string.IsNullOrWhiteSpace(tag))
                 return false;
-            }
+
+            tag = tag.Trim();
 
             if (!tagMap.TryGetValue(tag, out var list) || list == null || list.Count == 0)
-            {
-                connector = null;
                 return false;
-            }
 
             for (var i = 0; i < list.Count; i++)
             {
@@ -169,19 +186,175 @@ namespace AbyssMoth
                 }
             }
 
+            return false;
+        }
+
+        public bool TryGetFirstByTag<TConnector>(string tag, out TConnector connector, bool includeDerived = true)
+            where TConnector : LocalConnector
+        {
             connector = null;
+
+            if (string.IsNullOrWhiteSpace(tag))
+                return false;
+
+            if (!tagMap.TryGetValue(tag.Trim(), out var list) || list == null || list.Count == 0)
+                return false;
+
+            var requestedType = typeof(TConnector);
+
+            for (var i = 0; i < list.Count; i++)
+            {
+                var item = list[i];
+                if (item == null)
+                    continue;
+
+                if (item is not TConnector typed)
+                    continue;
+
+                if (!includeDerived && item.GetType() != requestedType)
+                    continue;
+
+                connector = typed;
+                return true;
+            }
+
             return false;
         }
 
         public IReadOnlyList<LocalConnector> GetAllByTag(string tag)
         {
-            if (string.IsNullOrEmpty(tag))
+            if (string.IsNullOrWhiteSpace(tag))
                 return emptyConnectors;
 
-            if (tagMap.TryGetValue(tag, out var list) && list != null)
-                return list;
+            if (!tagMap.TryGetValue(tag.Trim(), out var list) || list == null)
+                return emptyConnectors;
 
-            return emptyConnectors;
+            PruneDeadConnectors(list);
+            return list;
+        }
+
+        public int GetAllByTagNonAlloc(string tag, List<LocalConnector> connectorsBuffer)
+        {
+            if (connectorsBuffer == null)
+                throw new ArgumentNullException(nameof(connectorsBuffer));
+
+            connectorsBuffer.Clear();
+
+            if (string.IsNullOrWhiteSpace(tag))
+                return 0;
+
+            if (!tagMap.TryGetValue(tag.Trim(), out var list) || list == null)
+                return 0;
+
+            for (var i = 0; i < list.Count; i++)
+            {
+                var connector = list[i];
+                if (connector != null)
+                    connectorsBuffer.Add(connector);
+            }
+
+            return connectorsBuffer.Count;
+        }
+
+        public bool TryGetFirstConnector<TConnector>(out TConnector connector, bool includeDerived = true)
+            where TConnector : LocalConnector
+        {
+            connector = null;
+
+            var requestedType = typeof(TConnector);
+
+            if (connectorMap.TryGetValue(requestedType, out var direct) && direct != null)
+            {
+                PruneDeadConnectors(direct);
+
+                for (var i = 0; i < direct.Count; i++)
+                {
+                    var item = direct[i];
+                    if (item is TConnector typed)
+                    {
+                        connector = typed;
+                        return true;
+                    }
+                }
+            }
+
+            if (!includeDerived)
+                return false;
+
+            var keys = GetAssignableConnectorKeys(requestedType);
+
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var keyType = keys[i];
+                if (keyType == requestedType)
+                    continue;
+
+                if (!connectorMap.TryGetValue(keyType, out var list) || list == null)
+                    continue;
+
+                PruneDeadConnectors(list);
+
+                for (var j = 0; j < list.Count; j++)
+                {
+                    var item = list[j];
+                    if (item is TConnector typed)
+                    {
+                        connector = typed;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public int GetConnectors<TConnector>(List<TConnector> buffer, bool includeDerived = true)
+            where TConnector : LocalConnector
+        {
+            if (buffer == null)
+                return 0;
+
+            buffer.Clear();
+
+            var requestedType = typeof(TConnector);
+
+            if (connectorMap.TryGetValue(requestedType, out var direct) && direct != null)
+            {
+                PruneDeadConnectors(direct);
+
+                for (var i = 0; i < direct.Count; i++)
+                {
+                    var item = direct[i];
+                    if (item is TConnector typed)
+                        buffer.Add(typed);
+                }
+            }
+
+            if (!includeDerived)
+                return buffer.Count;
+
+            var keys = GetAssignableConnectorKeys(requestedType);
+
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var keyType = keys[i];
+                if (keyType == requestedType)
+                    continue;
+
+                if (!connectorMap.TryGetValue(keyType, out var list) || list == null)
+                    continue;
+
+                PruneDeadConnectors(list);
+
+                for (var j = 0; j < list.Count; j++)
+                {
+                    var item = list[j];
+                    if (item is TConnector typed)
+                        buffer.Add(typed);
+                }
+            }
+
+            return buffer.Count;
         }
 
         public bool TryGetFirstNode<T>(out T node, bool includeDerived = true) where T : class
@@ -211,7 +384,7 @@ namespace AbyssMoth
             if (!includeDerived)
                 return false;
 
-            var keys = GetAssignableKeys(requestedType);
+            var keys = GetAssignableNodeKeys(requestedType);
 
             for (var i = 0; i < keys.Count; i++)
             {
@@ -269,7 +442,7 @@ namespace AbyssMoth
             if (!includeDerived)
                 return buffer.Count;
 
-            var keys = GetAssignableKeys(requestedType);
+            var keys = GetAssignableNodeKeys(requestedType);
 
             for (var i = 0; i < keys.Count; i++)
             {
@@ -334,141 +507,39 @@ namespace AbyssMoth
             return TryGetNodeInConnector(connector, out node);
         }
 
-        private void RegisterEntityKey(LocalConnector connector)
+        public T FindFirstNode<T>(bool includeDerived = true) where T : class
         {
-            var key = connector.GetComponent<EntityKeyBehaviour>();
-            if (key == null)
-                return;
+            if (TryGetFirstNode<T>(out var node, includeDerived))
+                return node;
 
-            var id = key.Id;
-
-            if (id <= 0 && key.AutoAssignId)
-            {
-                id = AllocateId();
-                key.SetId(id);
-            }
-
-            if (id > 0)
-            {
-                if (idMap.TryGetValue(id, out var existing) && existing != null && existing != connector)
-                    Debug.LogError($"SceneEntityIndex: Duplicate Id {id} on {connector.name} and {existing.name}", connector);
-                else
-                    idMap[id] = connector;
-            }
-
-            if (!string.IsNullOrEmpty(key.Tag))
-            {
-                if (!tagMap.TryGetValue(key.Tag, out var list) || list == null)
-                {
-                    list = new List<LocalConnector>(capacity: 4);
-                    tagMap[key.Tag] = list;
-                }
-
-                list.Add(connector);
-            }
+            return null;
         }
 
-        private void UnregisterEntityKey(LocalConnector connector)
+        public bool TryGetByTag(string tag, out LocalConnector connector) =>
+            TryGetFirstByTag(tag, out connector);
+
+        public T GetFirstNodeOrThrow<T>(bool includeDerived = true) where T : class
         {
-            var key = connector.GetComponent<EntityKeyBehaviour>();
-            if (key == null)
-                return;
+            if (TryGetFirstNode<T>(out var node, includeDerived))
+                return node;
 
-            if (key.Id > 0 && idMap.TryGetValue(key.Id, out var existing) && existing == connector)
-                idMap.Remove(key.Id);
-
-            if (!string.IsNullOrEmpty(key.Tag) && tagMap.TryGetValue(key.Tag, out var list) && list != null)
-            {
-                for (var i = list.Count - 1; i >= 0; i--)
-                {
-                    if (ReferenceEquals(list[i], connector))
-                    {
-                        list.RemoveAt(i);
-                        break;
-                    }
-                }
-
-                if (list.Count == 0)
-                    tagMap.Remove(key.Tag);
-            }
+            throw new InvalidOperationException($"SceneEntityIndex: Node {typeof(T).Name} not found.\n{BuildDump()}");
         }
 
-        private void RegisterNodes(LocalConnector connector)
+        public LocalConnector GetFirstByTagOrThrow(string tag)
         {
-            var nodes = connector.Nodes;
-            if (nodes == null)
-                return;
+            if (TryGetFirstByTag(tag, out var connector))
+                return connector;
 
-            for (var i = 0; i < nodes.Count; i++)
-            {
-                var node = nodes[i];
-                if (node == null)
-                    continue;
-
-                var type = node.GetType();
-
-                if (!nodeMap.TryGetValue(type, out var list) || list == null)
-                {
-                    list = new List<MonoBehaviour>(capacity: 4);
-                    nodeMap[type] = list;
-                }
-
-                list.Add(node);
-            }
+            throw new InvalidOperationException($"SceneEntityIndex: Tag '{tag}' not found.\n{BuildDump()}");
         }
 
-        private void UnregisterNodes(LocalConnector connector)
+        public LocalConnector GetByIdOrThrow(int id)
         {
-            var nodes = connector.Nodes;
-            if (nodes == null)
-                return;
+            if (TryGetById(id, out var connector))
+                return connector;
 
-            for (var i = 0; i < nodes.Count; i++)
-            {
-                var node = nodes[i];
-
-                if (ReferenceEquals(node, null))
-                    continue;
-
-                var type = node.GetType();
-
-                if (!nodeMap.TryGetValue(type, out var list) || list == null)
-                    continue;
-
-                list.Remove(node);
-
-                if (list.Count == 0)
-                    nodeMap.Remove(type);
-            }
-        }
-
-        private static void PruneDeadNodes(List<MonoBehaviour> list)
-        {
-            for (var i = list.Count - 1; i >= 0; i--)
-            {
-                if (list[i] == null)
-                    list.RemoveAt(i);
-            }
-        }
-
-        private void InvalidateAssignableCache() =>
-            assignableKeysCache.Clear();
-
-        private List<Type> GetAssignableKeys(Type requestedType)
-        {
-            if (assignableKeysCache.TryGetValue(requestedType, out var cached) && cached != null)
-                return cached;
-
-            var keys = new List<Type>(capacity: nodeMap.Count);
-
-            foreach (var kv in nodeMap)
-            {
-                if (requestedType.IsAssignableFrom(kv.Key))
-                    keys.Add(kv.Key);
-            }
-
-            assignableKeysCache[requestedType] = keys;
-            return keys;
+            throw new InvalidOperationException($"SceneEntityIndex: Id '{id}' not found.\n{BuildDump()}");
         }
 
         public void PruneDeadReferences()
@@ -501,11 +572,7 @@ namespace AbyssMoth
                         continue;
                     }
 
-                    for (var i = list.Count - 1; i >= 0; i--)
-                    {
-                        if (list[i] == null)
-                            list.RemoveAt(i);
-                    }
+                    PruneDeadConnectors(list);
 
                     if (list.Count == 0)
                         tagsToRemove.Add(kv.Key);
@@ -513,6 +580,30 @@ namespace AbyssMoth
 
                 for (var i = 0; i < tagsToRemove.Count; i++)
                     tagMap.Remove(tagsToRemove[i]);
+            }
+
+            if (connectorMap.Count > 0)
+            {
+                var typesToRemove = new List<Type>();
+
+                foreach (var kv in connectorMap)
+                {
+                    var list = kv.Value;
+
+                    if (list == null)
+                    {
+                        typesToRemove.Add(kv.Key);
+                        continue;
+                    }
+
+                    PruneDeadConnectors(list);
+
+                    if (list.Count == 0)
+                        typesToRemove.Add(kv.Key);
+                }
+
+                for (var i = 0; i < typesToRemove.Count; i++)
+                    connectorMap.Remove(typesToRemove[i]);
             }
 
             if (nodeMap.Count > 0)
@@ -529,11 +620,7 @@ namespace AbyssMoth
                         continue;
                     }
 
-                    for (var i = list.Count - 1; i >= 0; i--)
-                    {
-                        if (list[i] == null)
-                            list.RemoveAt(i);
-                    }
+                    PruneDeadNodes(list);
 
                     if (list.Count == 0)
                         typesToRemove.Add(kv.Key);
@@ -541,6 +628,20 @@ namespace AbyssMoth
 
                 for (var i = 0; i < typesToRemove.Count; i++)
                     nodeMap.Remove(typesToRemove[i]);
+            }
+
+            if (registered.Count > 0)
+            {
+                var dead = new List<LocalConnector>();
+
+                foreach (var connector in registered)
+                {
+                    if (connector == null)
+                        dead.Add(connector);
+                }
+
+                for (var i = 0; i < dead.Count; i++)
+                    registered.Remove(dead[i]);
             }
 
             InvalidateAssignableCache();
@@ -556,6 +657,7 @@ namespace AbyssMoth
             sb.AppendLine($"Registered: {registered.Count}");
             sb.AppendLine($"Ids: {idMap.Count}");
             sb.AppendLine($"Tags: {tagMap.Count}");
+            sb.AppendLine($"ConnectorTypes: {connectorMap.Count}");
             sb.AppendLine($"NodeTypes: {nodeMap.Count}");
             sb.AppendLine();
 
@@ -631,6 +733,31 @@ namespace AbyssMoth
                 sb.AppendLine();
             }
 
+            if (connectorMap.Count > 0)
+            {
+                sb.AppendLine("ConnectorTypes:");
+
+                var types = new List<Type>(connectorMap.Count);
+                foreach (var kv in connectorMap)
+                    types.Add(kv.Key);
+
+                types.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+
+                var limit = Mathf.Min(types.Count, maxItemsPerGroup);
+
+                for (var i = 0; i < limit; i++)
+                {
+                    var t = types[i];
+                    var list = connectorMap[t];
+                    sb.AppendLine($"  {t.Name} -> {(list != null ? list.Count : 0)}");
+                }
+
+                if (types.Count > limit)
+                    sb.AppendLine($"  ... +{types.Count - limit} more");
+
+                sb.AppendLine();
+            }
+
             if (nodeMap.Count > 0)
             {
                 sb.AppendLine("NodeTypes:");
@@ -660,241 +787,228 @@ namespace AbyssMoth
 
         public override string ToString() =>
             BuildDump();
-    }
 
-    [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
-    public sealed partial class SceneEntityIndex
-    {
-        public T FindFirstNode<T>(bool includeDerived = true) where T : class
+        private void RegisterEntity(LocalConnector connector)
         {
-            var requestedType = typeof(T);
+            if (connector == null)
+                return;
 
-            if (nodeMap.TryGetValue(requestedType, out var direct) && direct != null)
+            var id = connector.EntityId;
+
+            if (id <= 0)
             {
-                PruneDeadNodes(direct);
-
-                for (var i = 0; i < direct.Count; i++)
+                id = AllocateId();
+                connector.SetEntityIdInternal(id);
+            }
+            else
+            {
+                if (idMap.TryGetValue(id, out var existing) && existing != null && existing != connector)
                 {
-                    var item = direct[i];
-                    if (item == null)
-                        continue;
+                    var previous = id;
+                    id = AllocateId();
+                    connector.SetEntityIdInternal(id);
 
-                    if (item is T typed)
-                        return typed;
+                    FrameworkLogger.Warning(
+                        $"SceneEntityIndex: Duplicate Id {previous}. Reassigned '{connector.name}' to {id}.",
+                        connector);
                 }
+
+                reservedIds.Add(id);
             }
 
-            if (!includeDerived)
-                return null;
+            if (id > 0)
+                idMap[id] = connector;
 
-            var keys = GetAssignableKeys(requestedType);
-
-            for (var i = 0; i < keys.Count; i++)
-            {
-                var keyType = keys[i];
-
-                if (keyType == requestedType)
-                    continue;
-
-                if (!nodeMap.TryGetValue(keyType, out var list) || list == null)
-                    continue;
-
-                PruneDeadNodes(list);
-
-                for (var j = 0; j < list.Count; j++)
-                {
-                    var item = list[j];
-                    if (item == null)
-                        continue;
-
-                    if (item is T typed)
-                        return typed;
-                }
-            }
-
-            return null;
-        }
-        
-        public bool TryGetByTag(string tag, out LocalConnector connector) =>
-            TryGetFirstByTag(tag, out connector);
-
-        public T GetFirstNodeOrThrow<T>(bool includeDerived = true) where T : class
-        {
-            if (TryGetFirstNode<T>(out var node, includeDerived))
-                return node;
-
-            throw new InvalidOperationException($"SceneEntityIndex: Node {typeof(T).Name} not found.\n{BuildDump()}");
-        }
-
-        public LocalConnector GetFirstByTagOrThrow(string tag)
-        {
-            if (TryGetFirstByTag(tag, out var connector))
-                return connector;
-
-            throw new InvalidOperationException($"SceneEntityIndex: Tag '{tag}' not found.\n{BuildDump()}");
-        }
-
-        public LocalConnector GetByIdOrThrow(int id)
-        {
-            if (TryGetById(id, out var connector))
-                return connector;
-
-            throw new InvalidOperationException($"SceneEntityIndex: Id '{id}' not found.\n{BuildDump()}");
-        }
-    }
-
-    // === Extensions === //
-    public sealed partial class SceneEntityIndex
-    {
-        public (IReadOnlyList<LocalConnector>, IReadOnlyList<EntityKeyBehaviour>) GetAllByTagWithEntityListAllocation(string tag)
-        {
-            var localConnectors = GetAllByTag(tag);
-            if (localConnectors == null || localConnectors.Count == 0)
-                return (emptyConnectors, emptyEntityKeyBehaviours);
-
-            var entityKeyBehaviours = new List<EntityKeyBehaviour>(localConnectors.Count);
-
-            for (var i = 0; i < localConnectors.Count; i++)
-                entityKeyBehaviours.Add(localConnectors[i].GetComponent<EntityKeyBehaviour>());
-
-            return (localConnectors, entityKeyBehaviours);
-        }
-        
-         /// <summary>
-         /// <example>
-         /// <code>
-         ///   private readonly List<LocalConnector> doorConnectors = new(capacity: 16);
-         ///   private readonly List<EntityKeyBehaviour> doorKeys = new(capacity: 16);
-         ///   
-         ///   public void DebugDoors(SceneEntityIndex database)
-         ///    {
-         ///        var count = database.GetAllByTagNonAlloc("Door", doorConnectors, doorKeys);
-         ///  
-         ///        for (var i = 0; i < count; i++)
-         ///        {
-         ///            var connector = doorConnectors[i];
-         ///            var key = doorKeys[i];
-         ///            Debug.Log($"[Found->  Name: {connector.name} | Id: {key.Id}]");
-         ///        }
-         ///    }
-         /// </code>
-         /// </example>
-         /// </summary>
-        [SuppressMessage("ReSharper", "InvalidXmlDocComment")]
-         public int GetAllByTagNonAlloc(
-            string tag,
-            List<LocalConnector> connectorsBuffer,
-            List<EntityKeyBehaviour> entityKeysBuffer,
-            bool strict = false)
-        {
-            if (connectorsBuffer == null)
-                throw new ArgumentNullException(nameof(connectorsBuffer));
-
-            if (entityKeysBuffer == null)
-                throw new ArgumentNullException(nameof(entityKeysBuffer));
-
-            connectorsBuffer.Clear();
-            entityKeysBuffer.Clear();
+            var tag = NormalizeTag(connector.EntityTag);
 
             if (string.IsNullOrEmpty(tag))
-                return 0;
-
-            if (!tagMap.TryGetValue(tag, out var list) || list == null || list.Count == 0)
-                return 0;
-
-            if (connectorsBuffer.Capacity < list.Count)
-                connectorsBuffer.Capacity = list.Count;
-
-            if (entityKeysBuffer.Capacity < list.Count)
-                entityKeysBuffer.Capacity = list.Count;
-
-            for (var i = 0; i < list.Count; i++)
             {
-                var connector = list[i];
-                if (connector == null)
-                    continue;
-
-                if (!connector.TryGetComponent<EntityKeyBehaviour>(out var key) || key == null)
-                {
-                    if (strict)
-                        throw new InvalidOperationException(
-                            $"SceneEntityIndex: EntityKeyBehaviour missing on {connector.name}");
-
-                    continue;
-                }
-
-                connectorsBuffer.Add(connector);
-                entityKeysBuffer.Add(key);
+                connectorTagMap.Remove(connector);
+                return;
             }
 
-            return connectorsBuffer.Count;
+            if (!tagMap.TryGetValue(tag, out var list) || list == null)
+            {
+                list = new List<LocalConnector>(capacity: 4);
+                tagMap[tag] = list;
+            }
+
+            list.Add(connector);
+            connectorTagMap[connector] = tag;
         }
 
-         /// <summary>
-         /// <example>
-         /// <code>
-         /// private readonly List<EntityKeyBehaviour> doorKeys = new(capacity: 16);
-         /// 
-         ///   public void DebugDoors(SceneEntityIndex database)
-         ///   {
-         ///       var count = database.GetAllByTagEntityKeysNonAlloc("Door", doorKeys, out var connectors);
-         /// 
-         ///       for (var i = 0; i < count; i++)
-         ///       {
-         ///           var connector = connectors[i];
-         ///           var key = doorKeys[i];
-         /// 
-         ///           if (connector == null || key == null)
-         ///               continue;
-         /// 
-         ///           Debug.Log($"[Found->  Name: {connector.name} | Id: {key.Id}]");
-         ///       }
-         ///   }
-         /// </code>
-         /// </example>
-         /// </summary>
-        [SuppressMessage("ReSharper", "InvalidXmlDocComment")]
-         public int GetAllByTagEntityKeysNonAlloc(
-            string tag,
-            List<EntityKeyBehaviour> entityKeysBuffer,
-            out IReadOnlyList<LocalConnector> connectors,
-            bool strict = false)
+        private void UnregisterEntity(LocalConnector connector)
         {
-            if (entityKeysBuffer == null)
-                throw new ArgumentNullException(nameof(entityKeysBuffer));
+            if (connector == null)
+                return;
 
-            entityKeysBuffer.Clear();
+            var id = connector.EntityId;
+            if (id > 0 && idMap.TryGetValue(id, out var existing) && existing == connector)
+                idMap.Remove(id);
 
-            connectors = GetAllByTag(tag);
-            if (connectors == null || connectors.Count == 0)
-                return 0;
+            if (!connectorTagMap.TryGetValue(connector, out var tag))
+                tag = NormalizeTag(connector.EntityTag);
 
-            if (entityKeysBuffer.Capacity < connectors.Count)
-                entityKeysBuffer.Capacity = connectors.Count;
+            connectorTagMap.Remove(connector);
 
-            for (var i = 0; i < connectors.Count; i++)
+            if (string.IsNullOrEmpty(tag))
+                return;
+
+            if (!tagMap.TryGetValue(tag, out var list) || list == null)
+                return;
+
+            for (var i = list.Count - 1; i >= 0; i--)
             {
-                var connector = connectors[i];
-                if (connector == null)
+                if (ReferenceEquals(list[i], connector))
                 {
-                    entityKeysBuffer.Add(null);
-                    continue;
+                    list.RemoveAt(i);
+                    break;
                 }
-
-                if (!connector.TryGetComponent<EntityKeyBehaviour>(out var key) || key == null)
-                {
-                    if (strict)
-                        throw new InvalidOperationException(
-                            $"SceneEntityIndex: EntityKeyBehaviour missing on {connector.name}");
-
-                    entityKeysBuffer.Add(null);
-                    continue;
-                }
-
-                entityKeysBuffer.Add(key);
             }
 
-            return connectors.Count;
+            if (list.Count == 0)
+                tagMap.Remove(tag);
+        }
+
+        private void RegisterConnectorType(LocalConnector connector)
+        {
+            var type = connector.GetType();
+
+            if (!connectorMap.TryGetValue(type, out var list) || list == null)
+            {
+                list = new List<LocalConnector>(capacity: 4);
+                connectorMap[type] = list;
+            }
+
+            list.Add(connector);
+        }
+
+        private void UnregisterConnectorType(LocalConnector connector)
+        {
+            var type = connector.GetType();
+
+            if (!connectorMap.TryGetValue(type, out var list) || list == null)
+                return;
+
+            list.Remove(connector);
+
+            if (list.Count == 0)
+                connectorMap.Remove(type);
+        }
+
+        private void RegisterNodes(LocalConnector connector)
+        {
+            var nodes = connector.Nodes;
+            if (nodes == null)
+                return;
+
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+                if (node == null)
+                    continue;
+
+                var type = node.GetType();
+
+                if (!nodeMap.TryGetValue(type, out var list) || list == null)
+                {
+                    list = new List<MonoBehaviour>(capacity: 4);
+                    nodeMap[type] = list;
+                }
+
+                list.Add(node);
+            }
+        }
+
+        private void UnregisterNodes(LocalConnector connector)
+        {
+            var nodes = connector.Nodes;
+            if (nodes == null)
+                return;
+
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+
+                if (ReferenceEquals(node, null))
+                    continue;
+
+                var type = node.GetType();
+
+                if (!nodeMap.TryGetValue(type, out var list) || list == null)
+                    continue;
+
+                list.Remove(node);
+
+                if (list.Count == 0)
+                    nodeMap.Remove(type);
+            }
+        }
+
+        private static void PruneDeadConnectors(List<LocalConnector> list)
+        {
+            for (var i = list.Count - 1; i >= 0; i--)
+            {
+                if (list[i] == null)
+                    list.RemoveAt(i);
+            }
+        }
+
+        private static void PruneDeadNodes(List<MonoBehaviour> list)
+        {
+            for (var i = list.Count - 1; i >= 0; i--)
+            {
+                if (list[i] == null)
+                    list.RemoveAt(i);
+            }
+        }
+
+        private void InvalidateAssignableCache()
+        {
+            assignableNodeKeysCache.Clear();
+            assignableConnectorKeysCache.Clear();
+        }
+
+        private List<Type> GetAssignableNodeKeys(Type requestedType)
+        {
+            if (assignableNodeKeysCache.TryGetValue(requestedType, out var cached) && cached != null)
+                return cached;
+
+            var keys = new List<Type>(capacity: nodeMap.Count);
+
+            foreach (var kv in nodeMap)
+            {
+                if (requestedType.IsAssignableFrom(kv.Key))
+                    keys.Add(kv.Key);
+            }
+
+            assignableNodeKeysCache[requestedType] = keys;
+            return keys;
+        }
+
+        private List<Type> GetAssignableConnectorKeys(Type requestedType)
+        {
+            if (assignableConnectorKeysCache.TryGetValue(requestedType, out var cached) && cached != null)
+                return cached;
+
+            var keys = new List<Type>(capacity: connectorMap.Count);
+
+            foreach (var kv in connectorMap)
+            {
+                if (requestedType.IsAssignableFrom(kv.Key))
+                    keys.Add(kv.Key);
+            }
+
+            assignableConnectorKeysCache[requestedType] = keys;
+            return keys;
+        }
+
+        private static string NormalizeTag(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            return value.Trim();
         }
     }
 }

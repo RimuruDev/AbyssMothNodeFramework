@@ -27,8 +27,7 @@ namespace AbyssMoth
             if (component == null)
                 return;
 
-            if (component is not EntityKeyBehaviour &&
-                component is not LocalConnector &&
+            if (component is not LocalConnector &&
                 component is not SceneConnector &&
                 component is not ConnectorNode)
                 return;

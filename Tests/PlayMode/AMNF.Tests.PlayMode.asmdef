@@ -1,0 +1,19 @@
+{
+    "name": "AMNF.Tests.PlayMode",
+    "rootNamespace": "AbyssMoth.Tests",
+    "references": [
+        "GUID:adbda3056052341eba6768c10b1769d6"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

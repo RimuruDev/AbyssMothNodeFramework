@@ -11,12 +11,12 @@ namespace AbyssMoth
 
     public interface IBind
     {
-        public void Bind(ServiceRegistry registry);
+        public void Bind(ServiceContainer registry);
     }
 
     public interface IConstruct
     {
-        public void Construct(ServiceRegistry registry);
+        public void Construct(ServiceContainer registry);
     }
 
     public interface IPausable

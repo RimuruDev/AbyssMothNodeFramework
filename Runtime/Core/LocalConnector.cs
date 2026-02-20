@@ -20,8 +20,14 @@ namespace AbyssMoth
     [AddComponentMenu("AbyssMoth Node Framework/Local Connector")]
     public class LocalConnector : MonoBehaviour, IOrder
     {
+        [BoxGroup("Entity")]
+        [SerializeField, ReadOnly] private int entityId;
+
+        [BoxGroup("Entity")]
+        [SerializeField] private string entityTag;
+
         [BoxGroup("Order")]
-        [SerializeField, Min(-1)] private int order;
+        [SerializeField] private int order;
 
         public virtual int Order
         {
@@ -35,14 +41,6 @@ namespace AbyssMoth
         [BoxGroup("Nodes")]
         [SerializeField, ReorderableList] private List<MonoBehaviour> nodes = new();
 
-#if UNITY_EDITOR_MODE
-        [BoxGroup("Debug")]
-        [SerializeField] private bool autoCollectOnValidate = true;
-
-        [BoxGroup("Debug")]
-        [SerializeField] private bool autoPruneMissingOnValidate = true;
-#endif
-
         private readonly List<MonoBehaviour> collected = new(capacity: 64);
 
         private bool executed;
@@ -50,6 +48,9 @@ namespace AbyssMoth
         private int staticSceneHandle = -1;
         private bool disposed;
 
+        public int EntityId => entityId;
+        public string EntityTag => entityTag;
+        public bool HasEntityTag => !string.IsNullOrWhiteSpace(entityTag);
         public bool EnabledTicks => enabledTicks;
 
         public IReadOnlyList<MonoBehaviour> Nodes => nodes;
@@ -69,56 +70,6 @@ namespace AbyssMoth
         public bool IsPaused => pausedTicks;
         public bool EffectiveTicks => enabledTicks && !pausedTicks;
 
-#if UNITY_EDITOR_MODE
-        private ConnectorDebugConfig debugConfig;
-
-        [ShowNativeProperty] private int NodesCount => nodes.Count;
-        [ShowNativeProperty] private bool Executed => executed;
-        [ShowNativeProperty] private bool DynamicRegistered => dynamicRegistered;
-        [ShowNativeProperty] private bool IsStaticForCurrentScene => IsStaticFor(gameObject.scene.handle);
-
-        [ShowNativeProperty]
-        private string NodeOrder
-        {
-            get
-            {
-                var sb = new System.Text.StringBuilder();
-
-                for (var i = 0; i < nodes.Count; i++)
-                {
-                    var n = nodes[i];
-
-                    if (n == null)
-                    {
-                        sb.AppendLine("Missing");
-                        continue;
-                    }
-
-                    var nodeOrder = n is IOrder o ? o.Order : 0;
-                    sb.AppendLine($"{nodeOrder} | {n.GetType().Name}");
-                }
-
-                return sb.ToString();
-            }
-        }
-
-        [Button("Prune Missing Nodes")]
-        private void PruneMissingNodesButton()
-        {
-            if (Application.isPlaying)
-                return;
-
-            Undo.RecordObject(this, "Prune Missing Nodes");
-
-            var removed = PruneMissingNodes(rebuildCaches: false);
-            if (removed <= 0)
-                return;
-
-            EditorUtility.SetDirty(this);
-            EditorSceneManager.MarkAllScenesDirty();
-        }
-#endif
-
         public void OnEnable()
         {
             if (!Application.isPlaying)
@@ -127,7 +78,7 @@ namespace AbyssMoth
             if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector))
                 return;
 
-            if (!sceneConnector.IsInitialized)
+            if (!sceneConnector.CanRegisterRuntimeConnectors)
                 return;
 
             var sceneHandle = gameObject.scene.handle;
@@ -139,7 +90,10 @@ namespace AbyssMoth
             }
 
             if (dynamicRegistered)
+            {
+                Execute(sceneConnector.SceneContext, sender: sceneConnector);
                 return;
+            }
 
             sceneConnector.RegisterAndExecute(this);
             dynamicRegistered = true;
@@ -164,10 +118,44 @@ namespace AbyssMoth
         internal void MarkStatic(int sceneHandle) =>
             staticSceneHandle = sceneHandle;
 
+        internal void SetEntityIdInternal(int value)
+        {
+            entityId = value < 0
+                ? 0
+                : value;
+        }
+
+        internal void SetDynamicRegisteredInternal(bool value) =>
+            dynamicRegistered = value;
+
         internal bool IsStaticFor(int sceneHandle) =>
             staticSceneHandle == sceneHandle && staticSceneHandle != -1;
 
-        public void Execute(ServiceRegistry registry, Object sender = null)
+        public void SetEntityTag(string value)
+        {
+            var normalized = NormalizeTag(value);
+
+            if (string.Equals(entityTag, normalized, System.StringComparison.Ordinal))
+                return;
+
+            entityTag = normalized;
+
+            if (!Application.isPlaying)
+                return;
+
+            if (!SceneConnectorRegistry.TryGet(gameObject.scene, out var sceneConnector) || sceneConnector == null)
+                return;
+
+            if (!sceneConnector.CanRegisterRuntimeConnectors)
+                return;
+
+            if (!sceneConnector.SceneContext.TryGet(out SceneEntityIndex sceneIndex) || sceneIndex == null)
+                return;
+
+            sceneIndex.Refresh(this);
+        }
+
+        public void Execute(ServiceContainer registry, Object sender = null)
         {
             if (disposed || executed)
                 return;
@@ -175,21 +163,14 @@ namespace AbyssMoth
             executed = true;
 
 #if UNITY_EDITOR_MODE
-            debugConfig = null;
-            registry.TryGet(out debugConfig);
-
-            if (debugConfig != null && debugConfig.Enabled)
-            {
-                if (debugConfig.ValidateUnityCallbacks)
-                    ValidateUnityCallbacks();
-
-                if (debugConfig.LogLocalConnectorExecute)
-                {
-                    var senderName = sender != null ? sender.GetType().Name : "Null";
-                    Debug.Log($"LocalConnector Execute: {name} -> {senderName}", this);
-                }
-            }
+            if (FrameworkLogger.ShouldValidateNodeCallbacks())
+                ValidateUnityCallbacks();
 #endif
+            if (FrameworkLogger.ShouldLogConnectorExecute())
+            {
+                var senderName = sender != null ? sender.GetType().Name : "Null";
+                FrameworkLogger.Info($"LocalConnector Execute: {name} -> {senderName}", this);
+            }
 
             PruneMissingNodes(rebuildCaches: false);
             SortNodes();
@@ -329,7 +310,7 @@ namespace AbyssMoth
             InternalSetPausedTicks(false, sender);
         }
 
-        [Button("Collect Nodes - Собрать все нода. Жмякни если компоненты перестали выполнять Tick();")]
+        [Button("Rebuild Node Cache")]
         public void CollectNodes() =>
             CollectNodesCore(markDirtyIfChanged: !Application.isPlaying, rebuildCachesEvenIfSame: true);
 
@@ -412,24 +393,11 @@ namespace AbyssMoth
             if (Application.isPlaying)
                 return;
 
-            if (autoCollectOnValidate)
-            {
-                CollectNodesCore(markDirtyIfChanged: true, rebuildCachesEvenIfSame: false);
-                return;
-            }
+            if (entityId < 0)
+                entityId = 0;
 
-            if (autoPruneMissingOnValidate)
-            {
-                var removed = PruneMissingNodes(rebuildCaches: false);
-
-                if (removed > 0)
-                {
-                    EditorUtility.SetDirty(this);
-
-                    if (gameObject.scene.IsValid())
-                        EditorSceneManager.MarkSceneDirty(gameObject.scene);
-                }
-            }
+            entityTag = NormalizeTag(entityTag);
+            CollectNodesCore(markDirtyIfChanged: true, rebuildCachesEvenIfSame: false);
         }
 #endif
 
@@ -456,7 +424,7 @@ namespace AbyssMoth
             return string.CompareOrdinal(a.GetType().Name, b.GetType().Name);
         }
 
-        private void CallBind(ServiceRegistry registry)
+        private void CallBind(ServiceContainer registry)
         {
             for (var i = 0; i < nodes.Count; i++)
             {
@@ -465,11 +433,14 @@ namespace AbyssMoth
                     continue;
 
                 if (node is IBind bind)
+                {
+                    MarkNodeLifecycleEntered(node);
                     bind.Bind(registry);
+                }
             }
         }
 
-        private void CallConstruct(ServiceRegistry registry)
+        private void CallConstruct(ServiceContainer registry)
         {
             for (var i = 0; i < nodes.Count; i++)
             {
@@ -478,7 +449,10 @@ namespace AbyssMoth
                     continue;
 
                 if (node is IConstruct construct)
+                {
+                    MarkNodeLifecycleEntered(node);
                     construct.Construct(registry);
+                }
             }
         }
 
@@ -491,7 +465,10 @@ namespace AbyssMoth
                     continue;
 
                 if (node is IBeforeInit step)
+                {
+                    MarkNodeLifecycleEntered(node);
                     step.BeforeInit();
+                }
             }
         }
 
@@ -504,12 +481,15 @@ namespace AbyssMoth
                     continue;
 
 #if UNITY_EDITOR_MODE
-                if (debugConfig != null && debugConfig.Enabled && debugConfig.LogPhaseCalls && node is IInit)
-                    Debug.Log($"Init: {name} -> {node.GetType().Name}", node);
+                if (FrameworkLogger.ShouldLogNodePhases() && node is IInit)
+                    FrameworkLogger.Verbose($"Init: {name} -> {node.GetType().Name}", node);
 #endif
 
                 if (node is IInit step)
+                {
+                    MarkNodeLifecycleEntered(node);
                     step.Init();
+                }
             }
         }
 
@@ -522,8 +502,17 @@ namespace AbyssMoth
                     continue;
 
                 if (node is IAfterInit step)
+                {
+                    MarkNodeLifecycleEntered(node);
                     step.AfterInit();
+                }
             }
+        }
+
+        private static void MarkNodeLifecycleEntered(MonoBehaviour node)
+        {
+            if (node is ConnectorNode connectorNode)
+                connectorNode.MarkLifecycleEntered();
         }
 
         private bool ShouldRun(MonoBehaviour node)
@@ -554,7 +543,7 @@ namespace AbyssMoth
                 return;
             }
 
-            if (!sceneConnector.IsInitialized)
+            if (!sceneConnector.CanRegisterRuntimeConnectors)
                 return;
 
             sceneConnector.Unregister(this);
@@ -624,26 +613,27 @@ namespace AbyssMoth
 #if UNITY_EDITOR_MODE
             if (sender != null)
             {
-                Debug.Log(!pausedTicks
+                FrameworkLogger.Verbose(!pausedTicks
                     ? $"-> Resume | Sender: {sender.GetType().Name}.cs"
-                    : $"-> Pause | Sender: {sender.GetType().Name}.cs");
+                    : $"-> Pause | Sender: {sender.GetType().Name}.cs", this);
             }
 #endif
         }
 
         private void StepLogger(string label)
         {
-#if UNITY_EDITOR_MODE
-            if (debugConfig == null || !debugConfig.Enabled || !debugConfig.LogTicks)
+            if (!FrameworkLogger.ShouldLogTick(name))
                 return;
 
-            var filter = debugConfig.LogTicksOnlyForConnectorName;
+            FrameworkLogger.Verbose($"{label}: {name}", this);
+        }
 
-            if (!string.IsNullOrEmpty(filter) && !string.Equals(filter, name))
-                return;
+        private static string NormalizeTag(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
 
-            Debug.Log($"{label}: {name}", this);
-#endif
+            return value.Trim();
         }
 
 #if UNITY_EDITOR_MODE
@@ -663,7 +653,7 @@ namespace AbyssMoth
                     HasUnityCallback(type, methodName: "FixedUpdate") ||
                     HasUnityCallback(type, methodName: "LateUpdate"))
                 {
-                    Debug.LogError($"Unity callbacks are not allowed in ConnectorNode: {type.Name}", node);
+                    FrameworkLogger.Error($"Unity callbacks are not allowed in ConnectorNode: {type.Name}", node);
                 }
             }
         }

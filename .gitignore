@@ -78,8 +78,8 @@ Assets/AbyssMothNodeFramework/Resources/AbyssMothNodeFramework.meta
 Assets/AbyssMothNodeFramework/Resources/AbyssMothNodeFramework/
 
 Resources/AbyssMothNodeFramework.meta
-Resources/AbyssMothNodeFramework/ConnectorDebugConfig.asset
-Resources/AbyssMothNodeFramework/ConnectorDebugConfig.asset.meta
+Resources/AbyssMothNodeFramework/FrameworkConfig.asset
+Resources/AbyssMothNodeFramework/FrameworkConfig.asset.meta
 Resources/AbyssMothNodeFramework/ProjectRootConnector.prefab
 Resources/AbyssMothNodeFramework/ProjectRootConnector.prefab.meta
 Resources.meta
