@@ -243,6 +243,32 @@ namespace AbyssMoth
             }
         }
 
+        [MenuItem(menuRootEdit + "Diagnostics/Copy Last Init Trace To Clipboard", priority = 120)]
+        public static void CopyLastInitializationTraceToClipboard()
+        {
+            if (!FrameworkInitializationTrace.TryGetLastDump(out var dump))
+            {
+                Debug.LogWarning("AMNF init trace is empty. Run Play Mode with trace enabled in FrameworkConfig.");
+                return;
+            }
+
+            EditorGUIUtility.systemCopyBuffer = dump;
+            Debug.Log("AMNF init trace copied to clipboard.");
+        }
+
+        [MenuItem(menuRootEdit + "Diagnostics/Save Last Init Trace To File", priority = 121)]
+        public static void SaveLastInitializationTraceToFile()
+        {
+            if (!FrameworkInitializationTrace.TryWriteLastDumpToFile(out var path) || string.IsNullOrWhiteSpace(path))
+            {
+                Debug.LogWarning("AMNF init trace is empty or save failed.");
+                return;
+            }
+
+            Debug.Log($"AMNF init trace saved: {path}");
+            EditorUtility.RevealInFinder(path);
+        }
+
         [MenuItem(menuRootGameObject + "Create Scene Connector", priority = 10)]
         public static void CreateSceneConnector()
         {

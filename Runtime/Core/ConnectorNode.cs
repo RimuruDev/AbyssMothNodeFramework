@@ -44,8 +44,65 @@ namespace AbyssMoth
         private bool lifecycleEntered;
         public bool IsDisposed => disposed;
 
+        private ServiceContainer container;
+        private LocalConnector ownerConnector;
+        private SceneConnector cachedSceneConnector;
+        private SceneEntityIndex cachedSceneEntityIndex;
+        private AppLifecycleService cachedAppLifecycle;
+
+        protected ServiceContainer Container => container;
+        protected LocalConnector OwnerConnector => ownerConnector;
+        protected SceneConnector SceneConnector => ResolveFromContainer(ref cachedSceneConnector);
+        protected SceneEntityIndex SceneEntityIndex => ResolveFromContainer(ref cachedSceneEntityIndex);
+        protected AppLifecycleService AppLifecycle => ResolveFromContainer(ref cachedAppLifecycle);
+
         internal void MarkLifecycleEntered() =>
             lifecycleEntered = true;
+
+        internal void SetExecutionContext(ServiceContainer value, LocalConnector owner)
+        {
+            if (!ReferenceEquals(container, value))
+            {
+                container = value;
+                cachedSceneConnector = null;
+                cachedSceneEntityIndex = null;
+                cachedAppLifecycle = null;
+            }
+
+            ownerConnector = owner;
+        }
+
+        protected bool TryGetService<T>(out T value) where T : class
+        {
+            if (container == null)
+            {
+                value = null;
+                return false;
+            }
+
+            return container.TryGet(out value);
+        }
+
+        protected T GetService<T>() where T : class
+        {
+            if (container == null)
+                throw new System.InvalidOperationException(
+                    $"{GetType().Name} has no ServiceContainer context yet. Access services inside AMNF lifecycle methods.");
+
+            return container.Get<T>();
+        }
+
+        private T ResolveFromContainer<T>(ref T cache) where T : class
+        {
+            if (cache != null)
+                return cache;
+
+            if (container == null)
+                return null;
+
+            container.TryGet(out cache);
+            return cache;
+        }
 
         public virtual void Bind(ServiceContainer registry) { }
         public virtual void Construct(ServiceContainer registry) { }
@@ -114,6 +171,12 @@ namespace AbyssMoth
 
             if (parentConnector == null)
             {
+                if (!FrameworkLogger.ShouldWarnMissingParentLocalConnectorInEditor())
+                {
+                    warnedMissingParentNodes.Remove(instanceId);
+                    return;
+                }
+
                 if (!warnedMissingParentNodes.Add(instanceId))
                     return;
 

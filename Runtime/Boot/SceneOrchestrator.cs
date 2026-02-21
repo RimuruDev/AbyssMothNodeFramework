@@ -100,45 +100,55 @@ namespace AbyssMoth
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             FrameworkLogger.Boot($"Scene loaded: {scene.name} ({mode})", this);
+            FrameworkInitializationTrace.BeginSession($"Scene:{scene.name} ({mode})", this);
 
-            if (SceneConnectorRegistry.TryGet(scene, out var sceneConnector) && sceneConnector != null)
+            try
             {
-                sceneConnector.Execute(projectRoot.ProjectContext);
-                return;
-            }
+                FrameworkInitializationTrace.Event($"SceneOrchestrator.OnSceneLoaded: {scene.name} ({mode})", this);
 
-            var all = FindObjectsByType<SceneConnector>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-
-            SceneConnector found = null;
-
-            for (var i = 0; i < all.Length; i++)
-            {
-                var item = all[i];
-
-                if (item != null && item.gameObject.scene == scene)
+                if (SceneConnectorRegistry.TryGet(scene, out var sceneConnector) && sceneConnector != null)
                 {
-                    if (found != null)
-                    {
-                        FrameworkLogger.Error($"Two SceneConnector in scene: {scene.name}", this);
-                        return;
-                    }
-
-                    found = item;
+                    sceneConnector.Execute(projectRoot.ProjectContext);
+                    return;
                 }
-            }
 
-            if (found != null)
-            {
-                found.Execute(projectRoot.ProjectContext);
-                return;
-            }
+                var all = FindObjectsByType<SceneConnector>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+                SceneConnector found = null;
+
+                for (var i = 0; i < all.Length; i++)
+                {
+                    var item = all[i];
+
+                    if (item != null && item.gameObject.scene == scene)
+                    {
+                        if (found != null)
+                        {
+                            FrameworkLogger.Error($"Two SceneConnector in scene: {scene.name}", this);
+                            return;
+                        }
+
+                        found = item;
+                    }
+                }
+
+                if (found != null)
+                {
+                    found.Execute(projectRoot.ProjectContext);
+                    return;
+                }
 
 #if UNITY_EDITOR
-            if (string.Equals(scene.name, Constants.EmptySceneTransitionName))
-                return;
+                if (string.Equals(scene.name, Constants.EmptySceneTransitionName))
+                    return;
 
-            FrameworkLogger.Warning($"SceneConnector not found in scene: {scene.name}", this);
+                FrameworkLogger.Warning($"SceneConnector not found in scene: {scene.name}", this);
 #endif
+            }
+            finally
+            {
+                FrameworkInitializationTrace.EndSession(this);
+            }
         }
     }
 }

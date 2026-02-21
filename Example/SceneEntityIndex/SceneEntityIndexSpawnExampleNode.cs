@@ -10,15 +10,13 @@ namespace AbyssMothNodeFramework.Example
         [SerializeField] private string spawnedTag = "SpawnedEntity";
         [SerializeField] private bool spawnOnInit = true;
 
-        private SceneConnector sceneConnector;
-        private SceneEntityIndex sceneEntityIndex;
+        private SceneConnector spawnSceneConnector;
+        private SceneEntityIndex spawnSceneEntityIndex;
 
         public override void Construct(ServiceContainer registry)
         {
-            sceneConnector = registry.Get<SceneConnector>();
-            sceneEntityIndex = registry.Get<SceneEntityIndex>();
-
-            Debug.Log($"=>sceneConnector-> {sceneConnector==null}");
+            spawnSceneConnector = registry.Get<SceneConnector>();
+            spawnSceneEntityIndex = registry.Get<SceneEntityIndex>();
         }
 
         public override void Init()
@@ -26,17 +24,17 @@ namespace AbyssMothNodeFramework.Example
             if (!spawnOnInit || prefab == null)
                 return;
 
-            if (sceneConnector == null || sceneEntityIndex == null)
+            if (spawnSceneConnector == null || spawnSceneEntityIndex == null)
                 return;
 
-            var spawned = sceneConnector.InstantiateAndRegister(prefab);
+            var spawned = spawnSceneConnector.InstantiateAndRegister(prefab);
             if (spawned == null)
                 return;
 
             if (!string.IsNullOrWhiteSpace(spawnedTag))
                 spawned.SetEntityTag(spawnedTag);
 
-            if (sceneEntityIndex.TryGetFirstByTag(spawnedTag, out var found))
+            if (spawnSceneEntityIndex.TryGetFirstByTag(spawnedTag, out var found))
                 FrameworkLogger.Info(
                     $"[Example] Instant spawn lookup by tag '{spawnedTag}' -> {found.name}",
                     this);

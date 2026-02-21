@@ -11,17 +11,17 @@ namespace AbyssMothNodeFramework.Example
 {
     public sealed class MyFeatureNode : ConnectorNode
     {
-        private ServiceContainer registry;
-
         public override void Bind(ServiceContainer registry)
         {
-            this.registry = registry;
+            // Container уже доступен из base ConnectorNode
         }
 
         public override void Construct(ServiceContainer registry)
         {
             // Получение зависимостей
-            // var index = registry.Get<SceneEntityIndex>();
+            // var index = SceneEntityIndex;
+            // var scene = SceneConnector;
+            // var lifecycle = AppLifecycle;
         }
 
         public override void Init()
@@ -45,7 +45,6 @@ namespace AbyssMothNodeFramework.Example
 ## 2) Где что делать
 
 - `Bind`:
-  - сохранить `registry`,
   - зарегистрировать сервисы этой ноды.
 - `Construct`:
   - получить обязательные зависимости,
@@ -57,7 +56,20 @@ namespace AbyssMothNodeFramework.Example
 - `DisposeInternal`:
   - отписки и освобождение ресурсов.
 
-## 3) Если не уверен, что зависимость уже в контейнере
+## 3) Удобный доступ из `ConnectorNode` (без ручного кеша registry)
+
+Доступно прямо из `this`:
+- `Container` (`ServiceContainer`)
+- `OwnerConnector` (`LocalConnector`)
+- `SceneConnector` (`SceneConnector`)
+- `SceneEntityIndex` (`SceneEntityIndex`)
+- `AppLifecycle` (`AppLifecycleService`)
+
+Shortcut методы:
+- `GetService<T>()`
+- `TryGetService<T>(out T value)`
+
+## 4) Если не уверен, что зависимость уже в контейнере
 
 Безопасный вариант:
 - попытка через `TryGet` в `Construct`,
@@ -66,22 +78,22 @@ namespace AbyssMothNodeFramework.Example
 ```csharp
 public override void Construct(ServiceContainer registry)
 {
-    registry.TryGet(out SceneEntityIndex _);
+    TryGetService(out SceneEntityIndex _);
 }
 
 public override void AfterInit()
 {
-    var index = registry.Get<SceneEntityIndex>();
+    var index = GetService<SceneEntityIndex>();
 }
 ```
 
-## 4) Порядок выполнения
+## 5) Порядок выполнения
 
 `Order` влияет на порядок внутри одного `LocalConnector`.
 
 Для installer-узлов обычно ставят отрицательное значение (`-1000 .. -1`), чтобы они шли раньше обычной логики.
 
-## 5) Про Unity callbacks
+## 6) Про Unity callbacks
 
 Для `ConnectorNode` рекомендуется не использовать `Awake/Start/Update`.
 Используй lifecycle фреймворка (`Bind/Construct/Init/Tick`).
