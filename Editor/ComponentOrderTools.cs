@@ -17,7 +17,7 @@ namespace AbyssMoth
     [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
     public static class ComponentOrderTools
     {
-        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_3 + " Fix Component Order In Open Scenes", secondaryPriority = 4300)]
+        [MenuItem("AbyssMoth/Tools/" + EditorMenuConstants.WindowCode_3 + " Fix Component Order In Open Scenes", secondaryPriority = 4300)]
         public static void FixInOpenScenes()
         {
             for (var i = 0; i < SceneManager.sceneCount; i++)
@@ -32,7 +32,7 @@ namespace AbyssMoth
             }
         }
 
-        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_3 + "Fix Component Order In Selection",
+        [MenuItem("AbyssMoth/Tools/" + EditorMenuConstants.WindowCode_3 + "Fix Component Order In Selection",
             secondaryPriority = 4500)]
         public static void FixInSelection()
         {
@@ -44,7 +44,7 @@ namespace AbyssMoth
                 FixInHierarchy(selection[i]);
         }
 
-        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_3 + " Fix Component Order In Selected Prefabs",
+        [MenuItem("AbyssMoth/Tools/" + EditorMenuConstants.WindowCode_3 + " Fix Component Order In Selected Prefabs",
             secondaryPriority = 4800)]
         public static void FixInSelectedPrefabs()
         {

@@ -21,7 +21,7 @@ namespace AbyssMoth
         private int shiftFrom = 0;
         private int shiftDelta = 1;
 
-        [MenuItem("AbyssMoth/Tools/" + Constants.EmojiCode_1 + " Connector Node Order Explorer", priority = Constants.ConnectorNodeOrderExplorerWindow_Priority)]
+        [MenuItem("AbyssMoth/Tools/" + EditorMenuConstants.EmojiCode_1 + " Connector Node Order Explorer", priority = EditorMenuConstants.ConnectorNodeOrderExplorerWindow_Priority)]
         public static void Open()
         {
             var window = GetWindow<ConnectorNodeOrderExplorerWindow>();

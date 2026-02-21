@@ -161,6 +161,10 @@ namespace AbyssMoth
                 return;
 
             executed = true;
+            var senderName = sender != null ? sender.GetType().Name : "Null";
+            using var traceScope = new FrameworkInitializationTrace.Scope(
+                $"LocalConnector.Execute: {name} -> {senderName}",
+                this);
 
 #if UNITY_EDITOR_MODE
             if (FrameworkLogger.ShouldValidateNodeCallbacks())
@@ -168,13 +172,13 @@ namespace AbyssMoth
 #endif
             if (FrameworkLogger.ShouldLogConnectorExecute())
             {
-                var senderName = sender != null ? sender.GetType().Name : "Null";
                 FrameworkLogger.Info($"LocalConnector Execute: {name} -> {senderName}", this);
             }
 
             PruneMissingNodes(rebuildCaches: false);
             SortNodes();
             RebuildCaches();
+            CacheNodeExecutionContext(registry);
 
             CallBind(registry);
             CallConstruct(registry);
@@ -434,6 +438,9 @@ namespace AbyssMoth
 
                 if (node is IBind bind)
                 {
+                    if (FrameworkLogger.ShouldTraceInitializationNodePhases())
+                        FrameworkInitializationTrace.Event($"Bind: {node.GetType().Name}", node);
+
                     MarkNodeLifecycleEntered(node);
                     bind.Bind(registry);
                 }
@@ -450,6 +457,9 @@ namespace AbyssMoth
 
                 if (node is IConstruct construct)
                 {
+                    if (FrameworkLogger.ShouldTraceInitializationNodePhases())
+                        FrameworkInitializationTrace.Event($"Construct: {node.GetType().Name}", node);
+
                     MarkNodeLifecycleEntered(node);
                     construct.Construct(registry);
                 }
@@ -466,6 +476,9 @@ namespace AbyssMoth
 
                 if (node is IBeforeInit step)
                 {
+                    if (FrameworkLogger.ShouldTraceInitializationNodePhases())
+                        FrameworkInitializationTrace.Event($"BeforeInit: {node.GetType().Name}", node);
+
                     MarkNodeLifecycleEntered(node);
                     step.BeforeInit();
                 }
@@ -487,6 +500,9 @@ namespace AbyssMoth
 
                 if (node is IInit step)
                 {
+                    if (FrameworkLogger.ShouldTraceInitializationNodePhases())
+                        FrameworkInitializationTrace.Event($"Init: {node.GetType().Name}", node);
+
                     MarkNodeLifecycleEntered(node);
                     step.Init();
                 }
@@ -503,6 +519,9 @@ namespace AbyssMoth
 
                 if (node is IAfterInit step)
                 {
+                    if (FrameworkLogger.ShouldTraceInitializationNodePhases())
+                        FrameworkInitializationTrace.Event($"AfterInit: {node.GetType().Name}", node);
+
                     MarkNodeLifecycleEntered(node);
                     step.AfterInit();
                 }
@@ -513,6 +532,16 @@ namespace AbyssMoth
         {
             if (node is ConnectorNode connectorNode)
                 connectorNode.MarkLifecycleEntered();
+        }
+
+        private void CacheNodeExecutionContext(ServiceContainer registry)
+        {
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+                if (node is ConnectorNode connectorNode)
+                    connectorNode.SetExecutionContext(registry, owner: this);
+            }
         }
 
         private bool ShouldRun(MonoBehaviour node)

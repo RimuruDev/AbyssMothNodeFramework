@@ -1,6 +1,6 @@
 namespace AbyssMoth
 {
-    public static class Constants
+    public static class EditorMenuConstants
     {
         // Emoji -> source: https://ru.piliapp.com/emojis/desktop-computer/
         public const string EmojiCode_1 = "\ud83d\udda5\ufe0f";

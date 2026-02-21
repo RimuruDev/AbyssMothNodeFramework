@@ -17,7 +17,7 @@ namespace AbyssMoth
         private bool includeInactive = true;
         private string search = "";
 
-        [MenuItem("AbyssMoth/Tools/" + Constants.WindowCode_2 + " Entity Explorer", priority = Constants.EntityExplorerWindow_Priority)]
+        [MenuItem("AbyssMoth/Tools/" + EditorMenuConstants.WindowCode_2 + " Entity Explorer", priority = EditorMenuConstants.EntityExplorerWindow_Priority)]
         public static void Open()
         {
             var window = GetWindow<EntityExplorerWindow>();

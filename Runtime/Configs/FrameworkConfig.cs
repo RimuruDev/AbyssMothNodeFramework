@@ -69,8 +69,26 @@ namespace AbyssMoth
         [BoxGroup("Diagnostics"), EnableIf(nameof(logTickCalls))]
         [SerializeField] private string logTicksOnlyForConnectorName;
 
+        [BoxGroup("Diagnostics/Initialization Trace")]
+        [SerializeField] private bool captureInitializationTrace;
+
+        [BoxGroup("Diagnostics/Initialization Trace"), EnableIf(nameof(captureInitializationTrace))]
+        [SerializeField] private bool initializationTraceLogToConsole = true;
+
+        [BoxGroup("Diagnostics/Initialization Trace"), EnableIf(nameof(captureInitializationTrace))]
+        [SerializeField] private bool initializationTraceWriteToFile;
+
+        [BoxGroup("Diagnostics/Initialization Trace"), EnableIf(nameof(initializationTraceWriteToFile))]
+        [SerializeField] private string initializationTraceSubDirectory = "AMNF/InitTrace";
+
+        [BoxGroup("Diagnostics/Initialization Trace"), EnableIf(nameof(captureInitializationTrace))]
+        [SerializeField] private bool initializationTraceIncludeNodePhases = true;
+
         [BoxGroup("Diagnostics")]
         [SerializeField] private bool validateNodeUnityCallbacks = true;
+
+        [BoxGroup("Diagnostics/Editor")]
+        [SerializeField] private bool warnMissingParentLocalConnectorInEditor;
 
         public bool ApplyBootstrapSettings => applyBootstrapSettings;
         public bool OverrideTargetFrameRate => overrideTargetFrameRate;
@@ -89,7 +107,15 @@ namespace AbyssMoth
         public bool LogNodePhases => logNodePhases;
         public bool LogTickCalls => logTickCalls;
         public string LogTicksOnlyForConnectorName => logTicksOnlyForConnectorName;
+
+        public bool CaptureInitializationTrace => captureInitializationTrace;
+        public bool InitializationTraceLogToConsole => initializationTraceLogToConsole;
+        public bool InitializationTraceWriteToFile => initializationTraceWriteToFile;
+        public string InitializationTraceSubDirectory => initializationTraceSubDirectory;
+        public bool InitializationTraceIncludeNodePhases => initializationTraceIncludeNodePhases;
+
         public bool ValidateNodeUnityCallbacks => validateNodeUnityCallbacks;
+        public bool WarnMissingParentLocalConnectorInEditor => warnMissingParentLocalConnectorInEditor;
 
         public int ResolveSleepTimeoutValue()
         {

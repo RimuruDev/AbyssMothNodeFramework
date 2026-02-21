@@ -33,6 +33,14 @@
 - `LogTickCalls`
 - `LogTicksOnlyForConnectorName`
 - `ValidateNodeUnityCallbacks`
+- `WarnMissingParentLocalConnectorInEditor` (`false` по умолчанию)
+
+### Diagnostics / Initialization Trace
+- `CaptureInitializationTrace` — включает сбор дерева инициализации.
+- `InitializationTraceLogToConsole` — выводит весь граф одной пачкой в консоль после загрузки сцены.
+- `InitializationTraceWriteToFile` — сохраняет `.txt` в `Application.persistentDataPath`.
+- `InitializationTraceSubDirectory` — подпапка внутри `persistentDataPath`.
+- `InitializationTraceIncludeNodePhases` — добавляет фазы `Bind/Construct/BeforeInit/Init/AfterInit` по нодам.
 
 ## 3) FrameworkLogger API
 
@@ -45,6 +53,10 @@ FrameworkLogger.Boot("boot message", this);
 ```
 
 Логи проходят через фильтры `FrameworkConfig`.
+
+Для графа инициализации:
+- `Edit -> AbyssMoth Node Framework -> Diagnostics -> Copy Last Init Trace To Clipboard`
+- `Edit -> AbyssMoth Node Framework -> Diagnostics -> Save Last Init Trace To File`
 
 ## 4) Рекомендованный режим для продакшена
 
@@ -59,3 +71,6 @@ FrameworkLogger.Boot("boot message", this);
 - `LogBootSequence = true`
 - `LogConnectorExecute = true`
 - `LogNodePhases = true`
+- `CaptureInitializationTrace = true`
+- `InitializationTraceLogToConsole = true`
+- `InitializationTraceWriteToFile = true`

@@ -116,6 +116,9 @@ namespace AbyssMoth
                 return;
 
             executed = true;
+            using var traceScope = new FrameworkInitializationTrace.Scope(
+                $"SceneConnector.Execute: {name} (scene={gameObject.scene.name})",
+                this);
 
             sceneHandle = gameObject.scene.handle;
             sceneContext = new ServiceContainer(parentContainer: projectContext);
@@ -564,6 +567,10 @@ namespace AbyssMoth
             if (connector.gameObject.scene.handle != sceneHandle)
                 return;
 
+            using var traceScope = new FrameworkInitializationTrace.Scope(
+                $"Runtime Register: {connector.name}",
+                connector);
+
             sceneIndex.Register(connector);
 
             if (connector.isActiveAndEnabled)
@@ -640,7 +647,12 @@ namespace AbyssMoth
                     continue;
 
                 if (connector.isActiveAndEnabled)
+                {
+                    using var traceScope = new FrameworkInitializationTrace.Scope(
+                        $"Static Connector: {connector.name}",
+                        connector);
                     connector.Execute(sceneContext, sender: this);
+                }
             }
         }
         
