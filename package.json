@@ -1,6 +1,6 @@
 {
   "name": "com.rimurudev.abyssmoth-node-framework",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "displayName": "AbyssMoth Node Framework",
   "description": "A scene-driven node framework for fast Unity Android development with SceneConnector -> LocalConnector -> ConnectorNode lifecycle control, DI container support, ECS-style indexing, and editor tooling for small teams.",
   "unity": "2023.3",
