@@ -150,18 +150,28 @@ namespace AbyssMoth
             
             Dispose();
         }
+        
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        protected virtual void OnBeforeValidateInUnityEditor() { }
+        
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        protected virtual void OnAfterValidateInUnityEditor() { }
 
 #if UNITY_EDITOR_MODE
         private void OnValidate()
         {
-            if (Application.isPlaying)
-                return;
+            OnBeforeValidateInUnityEditor();
+            {
+                if (Application.isPlaying)
+                    return;
 
-            if (!FrameworkLogger.ShouldValidateNodeCallbacks())
-                return;
+                if (!FrameworkLogger.ShouldValidateNodeCallbacks())
+                    return;
 
-            ValidateParentConnector();
-            ValidateForbiddenCallbacks();
+                ValidateParentConnector();
+                ValidateForbiddenCallbacks();
+            }
+            OnAfterValidateInUnityEditor();
         }
 
         private void ValidateParentConnector()
